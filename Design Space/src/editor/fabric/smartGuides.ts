@@ -5,16 +5,38 @@ const SNAP_THRESHOLD = 5;
 const GUIDE_COLOR = 'rgba(128, 0, 128, 0.8)'; // Purple
 const GUIDE_STROKE_WIDTH = 1;
 
-let aligningLines: fabric.Line[] = [];
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface SnappingAnchor {
+  point: Point;
+  type: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+  orientation: 'vertical' | 'horizontal'; // To specify if it's a vertical or horizontal guide
+}
 
 /**
  * Initializes smart alignment guides on the Fabric.js canvas.
  * @param canvas The fabric.Canvas instance to attach the guides to.
  */
 export const initSmartGuides = (canvas: fabric.Canvas) => {
+  let aligningLines: fabric.Line[] = [];
+  let lastSnapCoords: { x?: number; y?: number } = {};
+  let currentRenderRAF: number | null = null;
+  let isAltKeyDown = false; // New state variable
 
-  const drawVerticalLine = (left: number) => {
-    const line = new fabric.Line([left, -canvas.height, left, canvas.height * 2], {
+  const removeAlignLines = () => {
+    aligningLines.forEach(line => canvas.remove(line));
+    aligningLines = [];
+    if (currentRenderRAF) {
+      cancelAnimationFrame(currentRenderRAF);
+      currentRenderRAF = null;
+    }
+  };
+
+  const drawVerticalLine = (x: number) => {
+    const line = new fabric.Line([x, -canvas.height, x, canvas.height * 2], {
       stroke: GUIDE_COLOR,
       strokeWidth: GUIDE_STROKE_WIDTH,
       selectable: false,
@@ -24,8 +46,8 @@ export const initSmartGuides = (canvas: fabric.Canvas) => {
     canvas.add(line);
   };
 
-  const drawHorizontalLine = (top: number) => {
-    const line = new fabric.Line([-canvas.width, top, canvas.width * 2, top], {
+  const drawHorizontalLine = (y: number) => {
+    const line = new fabric.Line([-canvas.width, y, canvas.width * 2, y], {
       stroke: GUIDE_COLOR,
       strokeWidth: GUIDE_STROKE_WIDTH,
       selectable: false,
@@ -33,79 +55,115 @@ export const initSmartGuides = (canvas: fabric.Canvas) => {
     });
     aligningLines.push(line);
     canvas.add(line);
+  };
+
+  const getAnchorPoints = (object: fabric.Object): SnappingAnchor[] => {
+    const points: SnappingAnchor[] = [];
+    const center = object.getCenterPoint();
+    const bbox = object.getBoundingRect();
+
+    // Vertical lines (x-coordinates)
+    points.push({ point: { x: bbox.left, y: center.y }, type: 'left', orientation: 'vertical' });
+    points.push({ point: { x: center.x, y: center.y }, type: 'center', orientation: 'vertical' });
+    points.push({ point: { x: bbox.left + bbox.width, y: center.y }, type: 'right', orientation: 'vertical' });
+
+    // Horizontal lines (y-coordinates)
+    points.push({ point: { x: center.x, y: bbox.top }, type: 'top', orientation: 'horizontal' });
+    points.push({ point: { x: center.x, y: center.y }, type: 'middle', orientation: 'horizontal' });
+    points.push({ point: { x: center.x, y: bbox.top + bbox.height }, type: 'bottom', orientation: 'horizontal' });
+
+    return points;
   };
 
   const onObjectMoving = (e: any) => {
     const activeObject = e?.target as fabric.Object | undefined;
     if (!activeObject) return;
 
-    // Clear previous guides
-    aligningLines.forEach(line => canvas.remove(line));
-    aligningLines = [];
-    lastSnapCoords = {}; // Reset potential snap coordinates
-
-    const canvasObjects = canvas.getObjects().filter(obj => obj !== activeObject);
-    const activeCenter = activeObject.getCenterPoint();
-
-    // Canvas Centering Guides
-    const canvasCenter = canvas.getCenter();
-    // Horizontal center
-    if (Math.abs(activeCenter.x - canvasCenter.left) < SNAP_THRESHOLD) {
-      lastSnapCoords.x = canvasCenter.left - activeObject.width / 2;
-      drawVerticalLine(canvasCenter.left);
-    }
-    // Vertical center
-    if (Math.abs(activeCenter.y - canvasCenter.top) < SNAP_THRESHOLD) {
-      lastSnapCoords.y = canvasCenter.top - activeObject.height / 2;
-      drawHorizontalLine(canvasCenter.top);
+    if (isAltKeyDown) {
+      removeAlignLines();
+      canvas.requestRenderAll();
+      lastSnapCoords = {}; // Ensure no snap is applied on mouse:up
+      return;
     }
 
-    // Object-to-Object Alignment
+    removeAlignLines(); // This also handles cancelling currentRenderRAF
+    lastSnapCoords = {}; // Reset potential snap coordinates for current move
+
+    let minDistanceX = SNAP_THRESHOLD + 1;
+    let minDistanceY = SNAP_THRESHOLD + 1;
+    let snapX: number | undefined;
+    let snapY: number | undefined;
+    let guideLineX: number | undefined;
+    let guideLineY: number | undefined;
+
+    const activeObjectAnchors = getAnchorPoints(activeObject);
+    const canvasObjects = canvas.getObjects().filter(obj => obj !== activeObject && !obj.get('isGuide') && obj.evented);
+
     canvasObjects.forEach((obj: fabric.Object) => {
-      const objCenter = obj.getCenterPoint();
-      const objBoundingRect = obj.getBoundingRect();
-      const activeBoundingRect = activeObject.getBoundingRect();
+        // Performance: Bounding box check first
+        const objBBox = obj.getBoundingRect();
+        const activeBBox = activeObject.getBoundingRect();
+        // Expand bbox to include snap threshold for proximity check
+        const expandedActiveBBox = {
+            left: activeBBox.left - SNAP_THRESHOLD,
+            top: activeBBox.top - SNAP_THRESHOLD,
+            right: activeBBox.left + activeBBox.width + SNAP_THRESHOLD,
+            bottom: activeBBox.top + activeBBox.height + SNAP_THRESHOLD,
+        };
+        const expandedObjBBox = {
+            left: objBBox.left - SNAP_THRESHOLD,
+            top: objBBox.top - SNAP_THRESHOLD,
+            right: objBBox.left + objBBox.width + SNAP_THRESHOLD,
+            bottom: objBBox.top + objBBox.height + SNAP_THRESHOLD,
+        };
 
-      // Vertical alignment
-      // Left-to-Left
-      if (Math.abs(activeBoundingRect.left - objBoundingRect.left) < SNAP_THRESHOLD) {
-        lastSnapCoords.x = objBoundingRect.left;
-        drawVerticalLine(objBoundingRect.left);
-      }
-      // Right-to-Right
-      if (Math.abs(activeBoundingRect.left + activeBoundingRect.width - (objBoundingRect.left + objBoundingRect.width)) < SNAP_THRESHOLD) {
-        lastSnapCoords.x = objBoundingRect.left + objBoundingRect.width - activeBoundingRect.width;
-        drawVerticalLine(objBoundingRect.left + objBoundingRect.width);
-      }
-      // Center-to-Center
-      if (Math.abs(activeCenter.x - objCenter.x) < SNAP_THRESHOLD) {
-        lastSnapCoords.x = objCenter.x - activeObject.width / 2;
-        drawVerticalLine(objCenter.x);
-      }
+        // If bounding boxes don't overlap within expanded threshold, skip detailed check
+        if (expandedActiveBBox.left > expandedObjBBox.right ||
+            expandedActiveBBox.right < expandedObjBBox.left ||
+            expandedActiveBBox.top > expandedObjBBox.bottom ||
+            expandedActiveBBox.bottom < expandedObjBBox.top) {
+            return;
+        }
 
-      // Horizontal alignment
-      // Top-to-Top
-      if (Math.abs(activeBoundingRect.top - objBoundingRect.top) < SNAP_THRESHOLD) {
-        lastSnapCoords.y = objBoundingRect.top;
-        drawHorizontalLine(objBoundingRect.top);
-      }
-      // Bottom-to-Bottom
-      if (Math.abs(activeBoundingRect.top + activeBoundingRect.height - (objBoundingRect.top + objBoundingRect.height)) < SNAP_THRESHOLD) {
-        lastSnapCoords.y = objBoundingRect.top + objBoundingRect.height - activeBoundingRect.height;
-        drawHorizontalLine(objBoundingRect.top + objBoundingRect.height);
-      }
-      // Center-to-Center
-      if (Math.abs(activeCenter.y - objCenter.y) < SNAP_THRESHOLD) {
-        lastSnapCoords.y = objCenter.y - activeObject.height / 2;
-        drawHorizontalLine(objCenter.y);
-      }
+      const objAnchors = getAnchorPoints(obj);
+
+      activeObjectAnchors.forEach(activeAnchor => {
+        objAnchors.forEach(staticAnchor => {
+            // Check for vertical alignment (x-coordinates)
+            if (activeAnchor.orientation === 'vertical' && staticAnchor.orientation === 'vertical') {
+                const distance = Math.abs(activeAnchor.point.x - staticAnchor.point.x);
+                if (distance < SNAP_THRESHOLD && distance < minDistanceX) {
+                    minDistanceX = distance;
+                    // Calculate where active object's left should be to align activeAnchor.x with staticAnchor.x
+                    snapX = activeObject.left + (staticAnchor.point.x - activeAnchor.point.x);
+                    guideLineX = staticAnchor.point.x;
+                }
+            }
+
+            // Check for horizontal alignment (y-coordinates)
+            if (activeAnchor.orientation === 'horizontal' && staticAnchor.orientation === 'horizontal') {
+                const distance = Math.abs(activeAnchor.point.y - staticAnchor.point.y);
+                if (distance < SNAP_THRESHOLD && distance < minDistanceY) {
+                    minDistanceY = distance;
+                    // Calculate where active object's top should be to align activeAnchor.y with staticAnchor.y
+                    snapY = activeObject.top + (staticAnchor.point.y - activeAnchor.point.y);
+                    guideLineY = staticAnchor.point.y;
+                }
+            }
+        });
+      });
     });
 
-    if (Object.keys(lastSnapCoords).length > 0) {
-      activeObject.set(lastSnapCoords).setCoords();
+    if (snapX !== undefined) {
+        lastSnapCoords.x = snapX;
+        drawVerticalLine(guideLineX as number);
+    }
+    if (snapY !== undefined) {
+        lastSnapCoords.y = snapY;
+        drawHorizontalLine(guideLineY as number);
     }
 
-    if (aligningLines.length > 0 || currentRenderRAF !== null) {
+    if (aligningLines.length > 0) {
       if (currentRenderRAF) {
         cancelAnimationFrame(currentRenderRAF);
       }
@@ -116,50 +174,59 @@ export const initSmartGuides = (canvas: fabric.Canvas) => {
     }
   };
 
-  const onMovingStopped = () => {
-    aligningLines.forEach(line => canvas.remove(line));
-    aligningLines = [];
-    canvas.requestRenderAll();
-  };
-
-  canvas.on('object:moving', onObjectMoving);
-  canvas.on('mouse:up', () => {
+  const onMouseUpHandler = () => { // Named the anonymous function
+    // This now correctly handles RAF cleanup within removeAlignLines
     removeAlignLines();
-    if (currentRenderRAF) {
-      cancelAnimationFrame(currentRenderRAF);
-      currentRenderRAF = null;
-    }
 
     const activeObject = canvas.getActiveObject();
     if (activeObject && (lastSnapCoords.x !== undefined || lastSnapCoords.y !== undefined)) {
-      const {
-        x,
-        y
-      } = lastSnapCoords;
       const snapOptions: {
         left ? : number;
         top ? : number
       } = {};
 
-      if (x !== undefined) {
-        snapOptions.left = x;
+      if (lastSnapCoords.x !== undefined) {
+        snapOptions.left = lastSnapCoords.x;
       }
-      if (y !== undefined) {
-        snapOptions.top = y;
+      if (lastSnapCoords.y !== undefined) {
+        snapOptions.top = lastSnapCoords.y;
       }
 
       activeObject.set(snapOptions);
       activeObject.setCoords(); // Update object's bounding box
-      canvas.renderAll();
+      canvas.requestRenderAll(); // Use requestRenderAll consistently
     }
     lastSnapCoords = {}; // Clear snap coordinates after drop
-  });
-  canvas.on('object:modified', onMovingStopped); // Another event that signifies moving has stopped
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.altKey) {
+      isAltKeyDown = true;
+      removeAlignLines(); // Clear guides immediately if Alt is pressed during drag
+      canvas.requestRenderAll();
+    }
+  };
+
+  const handleKeyUp = (e: KeyboardEvent) => {
+    if (!e.altKey) { // Only set to false if alt key is released
+      isAltKeyDown = false;
+    }
+  };
+
+  window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('keyup', handleKeyUp);
+
+  canvas.on('object:moving', onObjectMoving);
+  canvas.on('mouse:up', onMouseUpHandler); // Use the named handler
+  canvas.on('object:modified', removeAlignLines); // Use the centralized cleanup function
 
   // Return a cleanup function
   return () => {
     canvas.off('object:moving', onObjectMoving);
-    canvas.off('mouse:up', onMovingStopped);
-    canvas.off('object:modified', onMovingStopped);
+    canvas.off('mouse:up', onMouseUpHandler);
+    canvas.off('object:modified', removeAlignLines);
+    window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener('keyup', handleKeyUp);
+    canvas.dispose(); // Add canvas disposal
   };
 };
