@@ -1,0 +1,49 @@
+Using the aesthetic guidelines provided, I need to modify the WitchDraft app.py file to implement a soft, cozy, sanctuary-like UI. The current interface has harsh boxes and raw text that feels clinical rather than welcoming.
+
+Implement the following changes to src/witchdraft/app.py:
+
+1. **Update the global color constants** at the top of the file to use warmer, softer colors:
+- APP_BG: Change from "#E6E5E6" to "#F7F5F0" (warmer off-white)
+- TEXT_COLOR: Change from "#2B2B2B" to "#5A5550" (warmer gray)
+- TITLE_BG: Change from "#DBD9D6" to "#F0EDE5" (warmer)
+- STATUS_BG: Change from "#D2D0CD" to "#E8E4DC" (warmer)
+- ACCENT: Change from "#6BBF9B" to "#A8C5A2" (softer green)
+
+2. **Update the stylesheet sections** to include rounded corners and softer styling:
+- Add border-radius: 12px to major UI elements
+- Add soft shadows (box-shadow: 0 4px 12px rgba(0,0,0,0.08))
+- Use softer hover effects with transitions
+- Round corners on buttons, text areas, and panels
+
+3. **Modify the TitleBar class**:
+- Add rounded corners to the title bar container
+- Implement a soft gradient background
+- Round the corners of all buttons (project, constellation, actions, minimize, close)
+- Add subtle hover animations
+
+4. **Update the TypewriterShell**:
+- Add rounded corners to the left and right margins
+- Add soft shadow around the entire editor area
+- Make the echo label more rounded with softer borders
+
+5. **Enhance the panel widgets** (ChaptersPanel, StorylinesPanel):
+- Add rounded corners to the panel containers
+- Use softer background colors
+- Round corners on buttons and list items
+- Add subtle shadows
+
+6. **Update the Dock Widgets**:
+- Round corners on dock widget headers
+- Softer header background with gradient
+- Add subtle shadows around docked panels
+
+7. **Modify the Constellation View**:
+- If possible, make node shapes more organic (rounded rectangles)
+- Use warmer colors for nodes and connections
+- Softer line weights for connections
+
+8. **Add transition animations**:
+- Smooth transitions for hover states
+- Gentle fade animations for opacity changes
+
+Focus especially on creating a warm, embracing feeling throughout the interface. The goal is to make the user feel like they're in a cozy creative sanctuary rather than a sterile workspace.

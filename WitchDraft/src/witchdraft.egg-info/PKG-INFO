@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: witchdraft
+Version: 0.1.0
+Summary: Local-first writing CLI built with Textual.
+Requires-Python: >=3.10
+Requires-Dist: PyQt6>=6.5.0
+Provides-Extra: spacy
+Requires-Dist: spacy>=3.6.0; extra == "spacy"
+Provides-Extra: pdf
+Requires-Dist: reportlab>=4.0.0; extra == "pdf"

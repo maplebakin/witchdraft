@@ -69,6 +69,39 @@ def _upsert_entity(conn: sqlite3.Connection, name: str, entity_type: str, timest
     return int(row[0])
 
 
+def _prune_stale_scenes(conn: sqlite3.Connection, valid_scene_ids: list[int]) -> None:
+    scene_tables = (
+        "scene_entities",
+        "scene_themes",
+        "scene_emotions",
+        "scene_atmospheres",
+        "scene_characters",
+        "character_arc",
+    )
+    if valid_scene_ids:
+        placeholders = ",".join("?" for _ in valid_scene_ids)
+        for table in scene_tables:
+            try:
+                conn.execute(
+                    f"DELETE FROM {table} WHERE scene_id NOT IN ({placeholders})",
+                    tuple(valid_scene_ids),
+                )
+            except sqlite3.OperationalError:
+                continue
+        conn.execute(
+            f"DELETE FROM scenes WHERE id NOT IN ({placeholders})",
+            tuple(valid_scene_ids),
+        )
+        return
+
+    for table in scene_tables:
+        try:
+            conn.execute(f"DELETE FROM {table}")
+        except sqlite3.OperationalError:
+            continue
+    conn.execute("DELETE FROM scenes")
+
+
 def run_spacy_scan(text: str, db_path: Path) -> None:
     if not text.strip():
         return
@@ -82,18 +115,28 @@ def run_spacy_scan(text: str, db_path: Path) -> None:
     try:
         ensure_vault_schema(conn)
         scenes = split_scenes(text)
-        conn.execute("DELETE FROM scene_entities")
-        conn.execute("DELETE FROM scenes")
+        valid_scene_ids: list[int] = []
 
         for position, (title, body) in enumerate(scenes, start=1):
-            cursor = conn.execute(
+            conn.execute(
                 """
                 INSERT INTO scenes (title, position, updated_at)
                 VALUES (?, ?, ?)
+                ON CONFLICT(position) DO UPDATE SET
+                    title = excluded.title,
+                    updated_at = excluded.updated_at
                 """,
                 (title, position, timestamp),
             )
-            scene_id = int(cursor.lastrowid)
+            row = conn.execute(
+                "SELECT id FROM scenes WHERE position = ?",
+                (position,),
+            ).fetchone()
+            if row is None:
+                continue
+            scene_id = int(row[0])
+            valid_scene_ids.append(scene_id)
+            conn.execute("DELETE FROM scene_entities WHERE scene_id = ?", (scene_id,))
             if not body.strip():
                 continue
             doc = nlp(body)
@@ -124,6 +167,7 @@ def run_spacy_scan(text: str, db_path: Path) -> None:
                     """,
                     (scene_id, entity_id, count),
                 )
+        _prune_stale_scenes(conn, valid_scene_ids)
         conn.commit()
     finally:
         conn.close()

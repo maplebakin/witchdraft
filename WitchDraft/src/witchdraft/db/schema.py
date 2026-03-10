@@ -114,6 +114,77 @@ def ensure_vault_schema(conn: sqlite3.Connection) -> None:
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS characters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            role TEXT,
+            archetype TEXT,
+            description TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_name_nocase
+        ON characters(name COLLATE NOCASE)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS character_relationships (
+            character_id INTEGER NOT NULL,
+            related_id INTEGER NOT NULL,
+            tag TEXT,
+            note TEXT,
+            PRIMARY KEY (character_id, related_id),
+            FOREIGN KEY(character_id) REFERENCES characters(id),
+            FOREIGN KEY(related_id) REFERENCES characters(id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_character_relationships_character
+        ON character_relationships(character_id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS character_arc (
+            character_id INTEGER NOT NULL,
+            scene_id INTEGER NOT NULL,
+            note TEXT,
+            PRIMARY KEY (character_id, scene_id),
+            FOREIGN KEY(character_id) REFERENCES characters(id),
+            FOREIGN KEY(scene_id) REFERENCES scenes(id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_character_arc_scene
+        ON character_arc(scene_id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS scene_characters (
+            scene_id INTEGER NOT NULL,
+            character_id INTEGER NOT NULL,
+            PRIMARY KEY (scene_id, character_id),
+            FOREIGN KEY(scene_id) REFERENCES scenes(id),
+            FOREIGN KEY(character_id) REFERENCES characters(id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_scene_characters_scene
+        ON scene_characters(scene_id)
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS writing_log (
             date TEXT PRIMARY KEY,
             words_written INTEGER NOT NULL
@@ -136,6 +207,49 @@ def ensure_vault_schema(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_notes_chapter_slug
         ON notes(chapter_slug)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS beats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL,
+            notes TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'idea',
+            chapter_id INTEGER,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(chapter_id) REFERENCES chapters(id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_beats_status
+        ON beats(status)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_beats_chapter
+        ON beats(chapter_id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS beat_characters (
+            beat_id INTEGER NOT NULL,
+            character_id INTEGER NOT NULL,
+            PRIMARY KEY (beat_id, character_id),
+            FOREIGN KEY(beat_id) REFERENCES beats(id),
+            FOREIGN KEY(character_id) REFERENCES characters(id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_beat_characters_character
+        ON beat_characters(character_id)
         """
     )
     conn.execute(

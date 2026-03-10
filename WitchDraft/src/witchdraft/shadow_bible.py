@@ -908,6 +908,33 @@ def store_scene_atmosphere(
     )
 
 
+def _prune_stale_scenes(conn: sqlite3.Connection, valid_scene_ids: list[int]) -> None:
+    tables = (
+        "scene_entities",
+        "scene_themes",
+        "scene_emotions",
+        "scene_atmospheres",
+        "scene_characters",
+        "character_arc",
+    )
+    if valid_scene_ids:
+        placeholders = ",".join("?" for _ in valid_scene_ids)
+        for table in tables:
+            conn.execute(
+                f"DELETE FROM {table} WHERE scene_id NOT IN ({placeholders})",
+                tuple(valid_scene_ids),
+            )
+        conn.execute(
+            f"DELETE FROM scenes WHERE id NOT IN ({placeholders})",
+            tuple(valid_scene_ids),
+        )
+        return
+
+    for table in tables:
+        conn.execute(f"DELETE FROM {table}")
+    conn.execute("DELETE FROM scenes")
+
+
 # =============================================================================
 # MAIN ENHANCED SCAN FUNCTION
 # =============================================================================
@@ -951,24 +978,34 @@ def run_enhanced_spacy_scan(text: str, db_path: Path) -> None:
 
         # Clear previous scan data (scene-specific tables)
         conn.execute("DELETE FROM scene_entities")
-        conn.execute("DELETE FROM scenes")
         conn.execute("DELETE FROM enhanced_traits")
         conn.execute("DELETE FROM entity_color_hints")
         conn.execute("DELETE FROM scene_atmospheres")
         conn.execute("DELETE FROM scene_themes")
         conn.execute("DELETE FROM scene_emotions")
+        valid_scene_ids: list[int] = []
 
         # Process each scene
         for position, (title, body) in enumerate(scenes, start=1):
-            # Insert scene
-            cursor = conn.execute(
+            # Upsert scene by position so scene IDs stay stable across scans.
+            conn.execute(
                 """
                 INSERT INTO scenes (title, position, updated_at)
                 VALUES (?, ?, ?)
+                ON CONFLICT(position) DO UPDATE SET
+                    title = excluded.title,
+                    updated_at = excluded.updated_at
                 """,
                 (title, position, timestamp),
             )
-            scene_id = int(cursor.lastrowid)
+            row = conn.execute(
+                "SELECT id FROM scenes WHERE position = ?",
+                (position,),
+            ).fetchone()
+            if row is None:
+                continue
+            scene_id = int(row[0])
+            valid_scene_ids.append(scene_id)
             scene_analysis = SceneAnalysis(scene_id=scene_id, title=title)
 
             if not body.strip():
@@ -1070,6 +1107,8 @@ def run_enhanced_spacy_scan(text: str, db_path: Path) -> None:
                     store_scene_emotion(conn, scene_id, emotion, intensity, timestamp)
 
             scene_analyses.append(scene_analysis)
+
+        _prune_stale_scenes(conn, valid_scene_ids)
 
         # Commit all changes
         conn.commit()

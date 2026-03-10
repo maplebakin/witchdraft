@@ -42,6 +42,7 @@ from PyQt6.QtGui import (
     QAction,
     QActionGroup,
     QColor,
+    QCursor,
     QDrag,
     QFont,
     QPainter,
@@ -55,12 +56,14 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication,
     QAbstractItemView,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDockWidget,
     QFrame,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QGraphicsEllipseItem,
     QGraphicsItem,
     QGraphicsOpacityEffect,
@@ -82,6 +85,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSlider,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -233,6 +237,19 @@ DEFAULT_EDITOR_SETTINGS = {
     "typewriter_scroll": False,
 }
 DEFAULT_DAILY_GOAL = 500
+CHARACTER_ROLE_OPTIONS = [
+    "protagonist",
+    "antagonist",
+    "supporting",
+    "other",
+]
+CHARACTER_RELATIONSHIP_OPTIONS = [
+    "ally",
+    "rival",
+    "lover",
+    "family",
+    "neutral",
+]
 NOTE_HIGHLIGHT = QColor(250, 238, 154, 140)
 NOTE_HIGHLIGHT_ACTIVE = QColor(246, 214, 110, 175)
 
@@ -384,60 +401,122 @@ def run_spacy_scan(text: str, db_path: Path) -> None:
 
 
 class TitleBar(QFrame):
-    def __init__(self, parent: QWidget, on_project, on_map) -> None:
+    def __init__(
+        self,
+        parent: QWidget,
+        on_navigation,
+        on_project,
+        on_chapter,
+        on_beats,
+        on_map,
+        on_fullscreen,
+    ) -> None:
         super().__init__(parent)
         self._drag_pos: QPoint | None = None
+        self._scan_status = "⟳ Scanning..."
         self.setObjectName("title-bar")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 6)
         layout.setSpacing(8)
 
+        self.nav_button = QPushButton("≡")
+        self.nav_button.setObjectName("nav-button")
+        self.nav_button.setFixedWidth(34)
+        self.nav_button.setToolTip("Navigation (Ctrl+\\)")
+        self.nav_button.clicked.connect(on_navigation)
+        layout.addWidget(self.nav_button)
+
         self.title = QLabel("WitchDraft")
         self.title.setObjectName("title-text")
         layout.addWidget(self.title)
 
-        self.project_label = QLabel("No Project")
-        self.project_label.setObjectName("project-label")
-        layout.addWidget(self.project_label)
+        self.left_sep_one = QLabel("|")
+        self.left_sep_one.setObjectName("top-separator")
+        layout.addWidget(self.left_sep_one)
 
-        self.scan_status_label = QLabel("⟳ Scanning...")
-        self.scan_status_label.setObjectName("scan-status-label")
-        layout.addWidget(self.scan_status_label)
-
-        layout.addStretch(1)
-
-        self.project_button = QPushButton("Project")
+        self.project_button = QPushButton("No Project")
         self.project_button.setObjectName("project-button")
+        self.project_button.setToolTip("Project Settings")
         self.project_button.clicked.connect(on_project)
         layout.addWidget(self.project_button)
 
-        self.map_button = QPushButton("Constellation")
-        self.map_button.setObjectName("map-button")
-        self.map_button.clicked.connect(on_map)
-        layout.addWidget(self.map_button)
+        self.left_sep_two = QLabel("|")
+        self.left_sep_two.setObjectName("top-separator")
+        layout.addWidget(self.left_sep_two)
 
-        self.actions_button = QPushButton("Actions")
+        self.chapter_button = QPushButton("No Chapter")
+        self.chapter_button.setObjectName("chapter-button")
+        self.chapter_button.setToolTip("Chapter list (Ctrl+\\)")
+        self.chapter_button.clicked.connect(on_chapter)
+        layout.addWidget(self.chapter_button)
+
+        self.session_meta_label = QLabel("saved · 0 words")
+        self.session_meta_label.setObjectName("session-meta-label")
+        layout.addWidget(self.session_meta_label)
+
+        layout.addStretch(1)
+
+        self.beats_button = QPushButton("⊞ Beats")
+        self.beats_button.setObjectName("beats-button")
+        self.beats_button.setToolTip("Beats panel (Ctrl+Shift+B)")
+        self.beats_button.clicked.connect(on_beats)
+        layout.addWidget(self.beats_button)
+
+        self.constellation_button = QPushButton("✦ Constellation")
+        self.constellation_button.setObjectName("constellation-button")
+        self.constellation_button.setToolTip("Constellation (Ctrl+Shift+X)")
+        self.constellation_button.clicked.connect(on_map)
+        layout.addWidget(self.constellation_button)
+
+        self.characters_button = QPushButton("⬡ Characters")
+        self.characters_button.setObjectName("characters-button")
+        self.characters_button.setToolTip("Characters (Ctrl+Shift+H)")
+        layout.addWidget(self.characters_button)
+
+        self.actions_button = QPushButton("··· Actions")
         self.actions_button.setObjectName("actions-button")
+        self.actions_button.setToolTip("Actions")
         layout.addWidget(self.actions_button)
 
+        self.fullscreen_button = QPushButton("⤢ Fullscreen")
+        self.fullscreen_button.setObjectName("fullscreen-button")
+        self.fullscreen_button.setCheckable(True)
+        self.fullscreen_button.clicked.connect(lambda _: on_fullscreen())
+        self.fullscreen_button.setToolTip("Fullscreen (F11)")
+        layout.addWidget(self.fullscreen_button)
+
         self.min_button = QPushButton("–")
+        self.min_button.setObjectName("min-button")
         self.min_button.setFixedWidth(32)
+        self.min_button.setToolTip("Minimize")
         self.min_button.clicked.connect(self.window().showMinimized)
         layout.addWidget(self.min_button)
 
         self.close_button = QPushButton("×")
+        self.close_button.setObjectName("close-button")
         self.close_button.setFixedWidth(32)
+        self.close_button.setToolTip("Close")
         self.close_button.clicked.connect(self.window().close)
         layout.addWidget(self.close_button)
 
     def set_project_name(self, name: str) -> None:
-        self.project_label.setText(name or "No Project")
+        value = name.strip() if name else "No Project"
+        self.project_button.setText(value)
+        self.project_button.setToolTip(f"{value}\n(Project Settings)")
+
+    def set_chapter_name(self, name: str) -> None:
+        value = name.strip() if name else "No Chapter"
+        self.chapter_button.setText(value)
+        self.chapter_button.setToolTip(f"{value}\n(Ctrl+\\)")
+
+    def set_session_meta(self, *, save_state: str, word_count: int) -> None:
+        self.session_meta_label.setText(f"{save_state} · {word_count:,} words")
 
     def set_scan_status(self, status: str) -> None:
-        self.scan_status_label.setText(status)
+        self._scan_status = status
 
     def scan_status(self) -> str:
-        return self.scan_status_label.text()
+        return self._scan_status
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -861,6 +940,574 @@ class StatusBar(QWidget):
         return self.label.text()
 
 
+class DrawerOverlay(QWidget):
+    """Slide-in overlay drawer that does not affect central layout geometry."""
+
+    def __init__(
+        self,
+        parent: QWidget,
+        *,
+        edge: str,
+        drawer_width: int,
+    ) -> None:
+        super().__init__(parent)
+        if edge not in {"left", "right"}:
+            raise ValueError("Drawer edge must be 'left' or 'right'.")
+        self._edge = edge
+        self._drawer_width = max(240, int(drawer_width))
+        self._panel_widget: QWidget | None = None
+        self._is_open = False
+
+        self.setObjectName(f"{edge}-drawer-overlay")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.hide()
+
+        self._panel = QFrame(self)
+        self._panel.setObjectName("drawer-panel")
+        self._panel_layout = QVBoxLayout(self._panel)
+        self._panel_layout.setContentsMargins(0, 0, 0, 0)
+        self._panel_layout.setSpacing(0)
+
+        self._animation = QPropertyAnimation(self._panel, b"pos", self)
+        self._animation.setDuration(220)
+        self._animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._animation.finished.connect(self._on_animation_finished)
+
+    def set_panel_widget(self, widget: QWidget) -> None:
+        if self._panel_widget is not None:
+            self._panel_layout.removeWidget(self._panel_widget)
+            self._panel_widget.setParent(None)
+        self._panel_widget = widget
+        self._panel_layout.addWidget(widget)
+
+    def is_open(self) -> bool:
+        return self._is_open and self.isVisible()
+
+    def show_drawer(self, animate: bool = True) -> None:
+        self._is_open = True
+        self._animation.stop()
+        self.show()
+        self.raise_()
+        self.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
+        self._sync_panel_geometry()
+        self._animate_to(self._open_position(), animate)
+
+    def hide_drawer(self, animate: bool = True) -> None:
+        if not self.isVisible():
+            self._is_open = False
+            return
+        self._is_open = False
+        self._animation.stop()
+        self._sync_panel_geometry()
+        self._animate_to(self._closed_position(), animate)
+
+    def toggle_drawer(self) -> None:
+        if self.is_open():
+            self.hide_drawer()
+        else:
+            self.show_drawer()
+
+    def _effective_drawer_width(self) -> int:
+        if self.width() <= 0:
+            return self._drawer_width
+        return min(self._drawer_width, max(240, self.width() - 48))
+
+    def _open_position(self) -> QPoint:
+        width = self._effective_drawer_width()
+        if self._edge == "left":
+            return QPoint(0, 0)
+        return QPoint(max(0, self.width() - width), 0)
+
+    def _closed_position(self) -> QPoint:
+        width = self._effective_drawer_width()
+        if self._edge == "left":
+            return QPoint(-width, 0)
+        return QPoint(self.width(), 0)
+
+    def _sync_panel_geometry(self) -> None:
+        width = self._effective_drawer_width()
+        self._panel.resize(width, self.height())
+        if self._is_open:
+            self._panel.move(self._open_position())
+        else:
+            self._panel.move(self._closed_position())
+
+    def _animate_to(self, target: QPoint, animate: bool) -> None:
+        if not animate:
+            self._panel.move(target)
+            self._on_animation_finished()
+            return
+        self._animation.setStartValue(self._panel.pos())
+        self._animation.setEndValue(target)
+        self._animation.start()
+
+    def _on_animation_finished(self) -> None:
+        if not self._is_open:
+            self.hide()
+
+    def mousePressEvent(self, event) -> None:
+        if not self._panel.geometry().contains(event.position().toPoint()):
+            self.hide_drawer()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.hide_drawer()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def resizeEvent(self, event) -> None:
+        self._sync_panel_geometry()
+        super().resizeEvent(event)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(10, 8, 6, 120))
+        super().paintEvent(event)
+
+
+class BeatDetailDialog(QDialog):
+    def __init__(
+        self,
+        beat: dict[str, object],
+        chapters: list[tuple[int, str]],
+        characters: list[tuple[int, str]],
+        selected_character_ids: set[int],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Beat")
+        self.resize(620, 560)
+        self.setModal(True)
+
+        self._chapters = chapters
+        self._characters = characters
+        self._selected_character_ids = set(selected_character_ids)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(14, 14, 14, 14)
+        root.setSpacing(10)
+
+        title = QLabel("Beat Detail")
+        title.setStyleSheet("""
+            QLabel {
+                font-family: "Georgia", serif;
+                font-size: 15px;
+                color: #e8e0d0;
+            }
+        """)
+        root.addWidget(title)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self.text_input = QTextEdit()
+        self.text_input.setPlaceholderText("Story moment, image, line, or note...")
+        self.text_input.setMinimumHeight(92)
+        self.text_input.setPlainText(str(beat.get("text") or ""))
+        form.addRow("Beat", self.text_input)
+
+        self.notes_input = QTextEdit()
+        self.notes_input.setPlaceholderText("Optional notes")
+        self.notes_input.setMinimumHeight(110)
+        self.notes_input.setPlainText(str(beat.get("notes") or ""))
+        form.addRow("Notes", self.notes_input)
+
+        self.status_input = QComboBox()
+        self.status_input.addItem("Idea", "idea")
+        self.status_input.addItem("Active", "active")
+        self.status_input.addItem("Used", "used")
+        beat_status = str(beat.get("status") or "idea")
+        self.status_input.setCurrentIndex(max(0, self.status_input.findData(beat_status)))
+        self.status_input.currentIndexChanged.connect(self._sync_chapter_availability)
+        form.addRow("Status", self.status_input)
+
+        self.chapter_input = QComboBox()
+        self.chapter_input.addItem("Unassigned", None)
+        for chapter_id, chapter_name in self._chapters:
+            self.chapter_input.addItem(chapter_name, chapter_id)
+        chapter_id = beat.get("chapter_id")
+        chapter_index = self.chapter_input.findData(chapter_id)
+        self.chapter_input.setCurrentIndex(chapter_index if chapter_index >= 0 else 0)
+        form.addRow("Chapter", self.chapter_input)
+
+        self.character_list = QListWidget()
+        self.character_list.setMinimumHeight(160)
+        for character_id, character_name in self._characters:
+            item = QListWidgetItem(character_name)
+            item.setData(Qt.ItemDataRole.UserRole, character_id)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked
+                if character_id in self._selected_character_ids
+                else Qt.CheckState.Unchecked
+            )
+            self.character_list.addItem(item)
+        form.addRow("Characters", self.character_list)
+
+        root.addLayout(form)
+
+        controls = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        controls.accepted.connect(self._accept_if_valid)
+        controls.rejected.connect(self.reject)
+        root.addWidget(controls)
+
+        self._sync_chapter_availability()
+
+    def _sync_chapter_availability(self) -> None:
+        status = self.status_input.currentData()
+        allow_chapter = status in {"active", "used"}
+        if not allow_chapter:
+            self.chapter_input.setCurrentIndex(0)
+        self.chapter_input.setEnabled(allow_chapter)
+
+    def _accept_if_valid(self) -> None:
+        if not self.text().strip():
+            QMessageBox.information(self, "Beat", "Beat text is required.")
+            return
+        self.accept()
+
+    def text(self) -> str:
+        return self.text_input.toPlainText().strip()
+
+    def notes(self) -> str:
+        return self.notes_input.toPlainText().strip()
+
+    def status(self) -> str:
+        return str(self.status_input.currentData() or "idea")
+
+    def chapter_id(self) -> int | None:
+        value = self.chapter_input.currentData()
+        if value is None:
+            return None
+        return int(value)
+
+    def selected_character_ids(self) -> set[int]:
+        selected: set[int] = set()
+        for row in range(self.character_list.count()):
+            item = self.character_list.item(row)
+            if item is None or item.checkState() != Qt.CheckState.Checked:
+                continue
+            value = item.data(Qt.ItemDataRole.UserRole)
+            if value is not None:
+                selected.add(int(value))
+        return selected
+
+
+class BeatRowWidget(QFrame):
+    def __init__(
+        self,
+        beat: dict[str, object],
+        *,
+        on_open,
+        action_text: str | None = None,
+        on_action=None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._beat_id = int(beat.get("id", 0))
+        self._on_open = on_open
+        self._on_action = on_action
+
+        self.setObjectName("beat-row")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setStyleSheet("""
+            QFrame#beat-row {
+                background-color: #2a2520;
+                border: 1px solid #3d3730;
+                border-radius: 8px;
+            }
+            QFrame#beat-row:hover {
+                border-color: #5a5248;
+            }
+            QLabel {
+                color: #e8e0d0;
+                font-family: "Georgia", serif;
+            }
+            QLabel#beat-meta {
+                color: #9a8f7e;
+                font-size: 11px;
+            }
+            QPushButton {
+                background-color: transparent;
+                border: 1px solid #5a5248;
+                border-radius: 6px;
+                color: #c9a84c;
+                padding: 3px 8px;
+                font-family: "Georgia", serif;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                border-color: #c9a84c;
+            }
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(8)
+
+        body = QVBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(3)
+
+        symbol = {
+            "idea": "○",
+            "active": "●",
+            "used": "✓",
+        }.get(str(beat.get("status") or "idea"), "○")
+        text = str(beat.get("text") or "").strip()
+        if len(text) > 110:
+            text = text[:107] + "..."
+        title = QLabel(f"{symbol} {text}")
+        title.setWordWrap(True)
+        body.addWidget(title)
+
+        char_names = list(beat.get("character_names") or [])
+        char_meta = ", ".join(char_names[:3]) if char_names else "No characters"
+        if len(char_names) > 3:
+            char_meta += f" +{len(char_names) - 3}"
+        status_meta = str(beat.get("status") or "idea")
+        chapter_meta = str(beat.get("chapter_title") or "")
+        meta_parts = [char_meta, status_meta]
+        if chapter_meta:
+            meta_parts.append(chapter_meta)
+        meta_label = QLabel(" · ".join(meta_parts))
+        meta_label.setObjectName("beat-meta")
+        meta_label.setWordWrap(True)
+        body.addWidget(meta_label)
+
+        layout.addLayout(body, stretch=1)
+
+        if action_text and self._on_action is not None:
+            action_button = QPushButton(action_text)
+            action_button.clicked.connect(self._trigger_action)
+            layout.addWidget(action_button, alignment=Qt.AlignmentFlag.AlignTop)
+
+    def _trigger_action(self) -> None:
+        if self._on_action:
+            self._on_action(self._beat_id)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self._on_open:
+            self._on_open(self._beat_id)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+
+class BeatsPanel(QWidget):
+    def __init__(
+        self,
+        on_add,
+        on_open,
+        on_assign,
+        on_mark_used,
+        on_filters_changed,
+    ) -> None:
+        super().__init__()
+        self.setObjectName("beats-panel")
+        self._on_add = on_add
+        self._on_open = on_open
+        self._on_assign = on_assign
+        self._on_mark_used = on_mark_used
+        self._on_filters_changed = on_filters_changed
+        self._chapter_name: str | None = None
+        self._global_beats: list[dict[str, object]] = []
+        self._chapter_active: list[dict[str, object]] = []
+        self._chapter_pool: list[dict[str, object]] = []
+        self._chapter_used: list[dict[str, object]] = []
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(10, 10, 10, 10)
+        root.setSpacing(8)
+
+        header = QHBoxLayout()
+        self.title_label = QLabel("BEATS")
+        self.title_label.setObjectName("panel-title")
+        header.addWidget(self.title_label)
+        header.addStretch(1)
+
+        self.mode_input = QComboBox()
+        self.mode_input.addItem("Chapter", "chapter")
+        self.mode_input.addItem("Global", "global")
+        self.mode_input.currentIndexChanged.connect(self._emit_filters_changed)
+        header.addWidget(self.mode_input)
+
+        self.add_button = QPushButton("+")
+        self.add_button.setFixedWidth(28)
+        self.add_button.clicked.connect(self._on_add)
+        header.addWidget(self.add_button)
+        root.addLayout(header)
+
+        filters = QHBoxLayout()
+        self.status_input = QComboBox()
+        self.status_input.addItem("All", None)
+        self.status_input.addItem("Idea", "idea")
+        self.status_input.addItem("Active", "active")
+        self.status_input.addItem("Used", "used")
+        self.status_input.currentIndexChanged.connect(self._emit_filters_changed)
+        filters.addWidget(self.status_input)
+
+        self.character_input = QComboBox()
+        self.character_input.addItem("Characters: All", None)
+        self.character_input.currentIndexChanged.connect(self._emit_filters_changed)
+        filters.addWidget(self.character_input, stretch=1)
+        root.addLayout(filters)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.host = QWidget()
+        self.host_layout = QVBoxLayout(self.host)
+        self.host_layout.setContentsMargins(0, 0, 0, 0)
+        self.host_layout.setSpacing(6)
+        self.host_layout.addStretch(1)
+        self.scroll.setWidget(self.host)
+        root.addWidget(self.scroll, stretch=1)
+
+    def _emit_filters_changed(self) -> None:
+        if self._on_filters_changed:
+            self._on_filters_changed()
+
+    def mode(self) -> str:
+        return str(self.mode_input.currentData() or "chapter")
+
+    def status_filter(self) -> str | None:
+        data = self.status_input.currentData()
+        if data is None:
+            return None
+        return str(data)
+
+    def character_filter(self) -> int | None:
+        data = self.character_input.currentData()
+        if data is None:
+            return None
+        return int(data)
+
+    def set_character_options(self, characters: list[tuple[int, str]]) -> None:
+        current = self.character_filter()
+        self.character_input.blockSignals(True)
+        self.character_input.clear()
+        self.character_input.addItem("Characters: All", None)
+        for character_id, character_name in characters:
+            self.character_input.addItem(character_name, character_id)
+        index = self.character_input.findData(current)
+        self.character_input.setCurrentIndex(index if index >= 0 else 0)
+        self.character_input.blockSignals(False)
+
+    def set_context(self, chapter_name: str | None) -> None:
+        self._chapter_name = chapter_name
+        if chapter_name:
+            self.title_label.setText(f"BEATS · {chapter_name}")
+        else:
+            self.title_label.setText("BEATS")
+
+    def set_data(
+        self,
+        *,
+        global_beats: list[dict[str, object]],
+        chapter_active: list[dict[str, object]],
+        chapter_pool: list[dict[str, object]],
+        chapter_used: list[dict[str, object]],
+    ) -> None:
+        self._global_beats = global_beats
+        self._chapter_active = chapter_active
+        self._chapter_pool = chapter_pool
+        self._chapter_used = chapter_used
+        self._render()
+
+    def _clear_rows(self) -> None:
+        while self.host_layout.count() > 1:
+            item = self.host_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _section_label(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setStyleSheet("""
+            QLabel {
+                color: #8a7f70;
+                font-family: "Georgia", serif;
+                font-size: 10px;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                padding: 6px 2px 2px 2px;
+            }
+        """)
+        return label
+
+    def _render_rows(
+        self,
+        beats: list[dict[str, object]],
+        *,
+        action_text: str | None = None,
+        on_action=None,
+    ) -> None:
+        if not beats:
+            empty = QLabel("No beats.")
+            empty.setStyleSheet("""
+                QLabel {
+                    color: #6d6458;
+                    padding: 4px 2px 8px 2px;
+                }
+            """)
+            self.host_layout.insertWidget(self.host_layout.count() - 1, empty)
+            return
+        for beat in beats:
+            row = BeatRowWidget(
+                beat,
+                on_open=self._on_open,
+                action_text=action_text,
+                on_action=on_action,
+            )
+            self.host_layout.insertWidget(self.host_layout.count() - 1, row)
+
+    def _render(self) -> None:
+        self._clear_rows()
+        is_chapter_mode = self.mode() == "chapter"
+        self.status_input.setEnabled(not is_chapter_mode)
+
+        if is_chapter_mode and self._chapter_name:
+            self.host_layout.insertWidget(
+                self.host_layout.count() - 1,
+                self._section_label("This Chapter"),
+            )
+            self._render_rows(
+                self._chapter_active,
+                action_text="✓ done",
+                on_action=self._on_mark_used,
+            )
+            if self._chapter_used:
+                self.host_layout.insertWidget(
+                    self.host_layout.count() - 1,
+                    self._section_label("Composted"),
+                )
+                self._render_rows(self._chapter_used)
+            self.host_layout.insertWidget(
+                self.host_layout.count() - 1,
+                self._section_label("Idea Pool (pull one in)"),
+            )
+            self._render_rows(
+                self._chapter_pool,
+                action_text="→",
+                on_action=self._on_assign,
+            )
+            return
+
+        self.host_layout.insertWidget(
+            self.host_layout.count() - 1,
+            self._section_label("Global Pool"),
+        )
+        self._render_rows(self._global_beats)
+
+
 class OutlinerCard(QWidget):
     """A single chapter card for the outliner panel."""
     
@@ -871,9 +1518,12 @@ class OutlinerCard(QWidget):
         word_count: int,
         storyline_tags: str,
         synopsis: str,
+        scenes: list[dict[str, object]],
+        character_options: list[tuple[int, str]],
         on_select: callable,
         on_reorder_drop: callable,
         on_synopsis_changed: callable,
+        on_scene_characters_changed: callable,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -881,6 +1531,10 @@ class OutlinerCard(QWidget):
         self._on_select = on_select
         self._on_reorder_drop = on_reorder_drop
         self._on_synopsis_changed = on_synopsis_changed
+        self._on_scene_characters_changed = on_scene_characters_changed
+        self._character_options = list(character_options)
+        self._scene_character_actions: dict[int, list[QAction]] = {}
+        self._scene_menu_buttons: dict[int, QPushButton] = {}
         self._drag_start_pos: QPoint | None = None
         self.setAcceptDrops(True)
         
@@ -969,6 +1623,35 @@ class OutlinerCard(QWidget):
         """)
         self.synopsis_edit.textChanged.connect(self._on_synopsis_text_changed)
         layout.addWidget(self.synopsis_edit)
+
+        if scenes:
+            scene_header = QLabel("Characters Present")
+            scene_header.setStyleSheet("""
+                QLabel {
+                    font-family: "Georgia", serif;
+                    font-size: 10px;
+                    letter-spacing: 0.1em;
+                    text-transform: uppercase;
+                    color: #8a7f70;
+                    padding-top: 4px;
+                }
+            """)
+            layout.addWidget(scene_header)
+
+            for scene in scenes:
+                scene_title = str(scene.get("title") or "Untitled Scene")
+                scene_id_raw = scene.get("scene_id")
+                scene_id = int(scene_id_raw) if scene_id_raw is not None else None
+                selected_ids = {
+                    int(value)
+                    for value in (scene.get("present_character_ids") or [])
+                }
+                self._build_scene_presence_row(
+                    layout,
+                    scene_title,
+                    scene_id,
+                    selected_ids,
+                )
     
     def chapter_id(self) -> int:
         return self._chapter_id
@@ -1001,6 +1684,96 @@ class OutlinerCard(QWidget):
         if self._on_synopsis_changed:
             self._on_synopsis_changed(self._chapter_id, self.synopsis_edit.toPlainText())
 
+    def _build_scene_presence_row(
+        self,
+        parent_layout: QVBoxLayout,
+        scene_title: str,
+        scene_id: int | None,
+        selected_ids: set[int],
+    ) -> None:
+        row = QWidget(self)
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(8)
+
+        title_label = QLabel(scene_title)
+        title_label.setStyleSheet("""
+            QLabel {
+                color: #c8bfaf;
+                font-family: "Georgia", serif;
+                font-size: 11px;
+            }
+        """)
+        row_layout.addWidget(title_label, stretch=1)
+
+        selector = QPushButton()
+        selector.setStyleSheet("""
+            QPushButton {
+                background-color: #211e1a;
+                color: #c8bfaf;
+                border: 1px solid #3d3730;
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-family: "Georgia", serif;
+                font-size: 11px;
+                text-align: left;
+            }
+            QPushButton:hover {
+                border-color: #5a5248;
+            }
+            QPushButton:disabled {
+                color: #6d6458;
+                border-color: #2d2823;
+            }
+        """)
+        row_layout.addWidget(selector)
+        parent_layout.addWidget(row)
+
+        if scene_id is None:
+            selector.setText("No scene id")
+            selector.setEnabled(False)
+            return
+
+        menu = QMenu(selector)
+        actions: list[QAction] = []
+        for character_id, name in self._character_options:
+            action = QAction(name, menu)
+            action.setCheckable(True)
+            action.setChecked(character_id in selected_ids)
+            action.toggled.connect(
+                lambda _checked, sid=scene_id: self._emit_scene_characters_changed(sid)
+            )
+            menu.addAction(action)
+            actions.append(action)
+        selector.setMenu(menu)
+        self._scene_character_actions[scene_id] = actions
+        self._scene_menu_buttons[scene_id] = selector
+        self._refresh_scene_selector_text(scene_id)
+
+    def _selected_character_ids(self, scene_id: int) -> set[int]:
+        selected: set[int] = set()
+        actions = self._scene_character_actions.get(scene_id, [])
+        for action, (character_id, _) in zip(actions, self._character_options):
+            if action.isChecked():
+                selected.add(character_id)
+        return selected
+
+    def _refresh_scene_selector_text(self, scene_id: int) -> None:
+        button = self._scene_menu_buttons.get(scene_id)
+        if button is None:
+            return
+        selected = self._selected_character_ids(scene_id)
+        if not selected:
+            button.setText("None")
+            return
+        button.setText(f"{len(selected)} selected")
+
+    def _emit_scene_characters_changed(self, scene_id: int) -> None:
+        selected = self._selected_character_ids(scene_id)
+        self._refresh_scene_selector_text(scene_id)
+        if self._on_scene_characters_changed:
+            self._on_scene_characters_changed(scene_id, selected)
+
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_start_pos = event.position().toPoint()
@@ -1023,6 +1796,7 @@ class OutlinerCard(QWidget):
             child is self.synopsis_edit
             or child is self.synopsis_edit.viewport()
             or self.synopsis_edit.isAncestorOf(child)
+            or isinstance(child, (QPushButton, QLineEdit, QComboBox, QTextEdit))
         ):
             super().mouseMoveEvent(event)
             return
@@ -1071,6 +1845,7 @@ class OutlinerPanel(QWidget):
         on_delete_chapter,
         on_reorder,
         on_update_synopsis,
+        on_scene_characters_changed,
     ) -> None:
         super().__init__()
         self.setObjectName("outliner-panel")
@@ -1080,6 +1855,7 @@ class OutlinerPanel(QWidget):
         self._on_delete_chapter = on_delete_chapter
         self._on_reorder = on_reorder
         self._on_update_synopsis = on_update_synopsis
+        self._on_scene_characters_changed = on_scene_characters_changed
         self._cards: list[OutlinerCard] = []
 
         layout = QVBoxLayout(self)
@@ -1138,6 +1914,8 @@ class OutlinerPanel(QWidget):
             words = int(chapter.get("word_count") or 0)
             storyline_tags = ", ".join(chapter.get("storyline_tags") or [])
             synopsis = str(chapter.get("synopsis") or "")
+            scenes = chapter.get("scenes") or []
+            character_options = chapter.get("character_options") or []
 
             card = OutlinerCard(
                 chapter_id=chapter_id,
@@ -1145,9 +1923,12 @@ class OutlinerPanel(QWidget):
                 word_count=words,
                 storyline_tags=storyline_tags,
                 synopsis=synopsis,
+                scenes=scenes,
+                character_options=character_options,
                 on_select=self._handle_card_selected,
                 on_reorder_drop=self._handle_card_drop,
                 on_synopsis_changed=self._on_update_synopsis,
+                on_scene_characters_changed=self._on_scene_characters_changed,
             )
             self._cards.append(card)
             self.cards_layout.insertWidget(len(self._cards) - 1, card)
@@ -1183,6 +1964,739 @@ class OutlinerPanel(QWidget):
         ordered_ids.insert(target_index, dragged_id)
         if self._on_reorder:
             self._on_reorder(ordered_ids)
+
+
+class CharacterProfileDialog(QDialog):
+    def __init__(
+        self,
+        db_path: Path,
+        character_id: int | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._db_path = db_path
+        self._character_id = character_id
+        self._saved_character_id: int | None = None
+        self._character_rows: list[tuple[int, str]] = []
+        self._relationship_inputs: dict[int, tuple[QComboBox, QLineEdit]] = {}
+        self._arc_section_lists: dict[str, QVBoxLayout] = {}
+
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setModal(True)
+        self.resize(900, 640)
+        self.setStyleSheet(
+            """
+            QDialog {
+                background-color: #E6E5E6;
+                border: 1px solid #BCA67A;
+                border-radius: 10px;
+            }
+            QLabel#overlay-title {
+                color: #2B2B2B;
+                font-family: "Georgia", serif;
+                font-size: 17px;
+            }
+            QLabel {
+                color: #2B2B2B;
+                font-family: "Georgia", serif;
+                font-size: 12px;
+            }
+            QLineEdit, QTextEdit, QComboBox {
+                background-color: #F2F1F0;
+                color: #2B2B2B;
+                border: 1px solid #BCA67A;
+                border-radius: 6px;
+                padding: 6px 8px;
+                font-family: "Georgia", serif;
+                font-size: 12px;
+            }
+            QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
+                border-color: #6BBF9B;
+            }
+            QTabWidget::pane {
+                border: 1px solid #BCA67A;
+                border-radius: 8px;
+                background-color: #EDEBE9;
+            }
+            QTabBar::tab {
+                background-color: #DBD9D8;
+                color: #2B2B2B;
+                border: 1px solid #BCA67A;
+                border-bottom: none;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                padding: 8px 14px;
+                margin-right: 4px;
+                font-family: "Georgia", serif;
+            }
+            QTabBar::tab:selected {
+                background-color: #EDEBE9;
+                color: #2B2B2B;
+            }
+            QPushButton#primary {
+                background-color: #6BBF9B;
+                color: #2B2B2B;
+                border: 1px solid #3e8a6c;
+                border-radius: 6px;
+                padding: 7px 16px;
+                font-family: "Georgia", serif;
+                font-size: 12px;
+            }
+            QPushButton#primary:hover {
+                background-color: #7fcfaf;
+            }
+            QPushButton#secondary {
+                background-color: transparent;
+                color: #2B2B2B;
+                border: 1px solid #BCA67A;
+                border-radius: 6px;
+                padding: 7px 16px;
+                font-family: "Georgia", serif;
+                font-size: 12px;
+            }
+            QPushButton#secondary:hover {
+                background-color: #DBD9D8;
+            }
+            QPushButton#close {
+                background-color: transparent;
+                color: #2B2B2B;
+                border: 1px solid #BCA67A;
+                border-radius: 14px;
+                min-width: 28px;
+                max-width: 28px;
+                min-height: 28px;
+                max-height: 28px;
+                font-family: "Georgia", serif;
+                font-size: 14px;
+            }
+            QPushButton#close:hover {
+                background-color: #DBD9D8;
+            }
+            QFrame#arc-section {
+                background-color: #F2F1F0;
+                border: 1px solid #D2C5AC;
+                border-radius: 8px;
+            }
+            QLabel#arc-section-title {
+                color: #5B5144;
+                font-family: "Georgia", serif;
+                font-size: 11px;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+            QFrame#arc-item {
+                background-color: #EBE8E4;
+                border: 1px solid #D2C5AC;
+                border-radius: 6px;
+            }
+            QLabel#arc-item-meta {
+                color: #7D7263;
+                font-size: 11px;
+            }
+            QLabel#arc-empty {
+                color: #8f897f;
+                font-style: italic;
+            }
+            """
+        )
+
+        self._load_catalog_data()
+        self._build_ui()
+        if self._character_id is not None:
+            self._load_character_data(self._character_id)
+
+    def saved_character_id(self) -> int | None:
+        return self._saved_character_id
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.reject()
+            return
+        super().keyPressEvent(event)
+
+    def _load_catalog_data(self) -> None:
+        conn = sqlite3.connect(self._db_path)
+        try:
+            ensure_vault_schema(conn)
+            self._character_rows = [
+                (int(row[0]), str(row[1]))
+                for row in conn.execute(
+                    "SELECT id, name FROM characters ORDER BY name COLLATE NOCASE"
+                ).fetchall()
+            ]
+        finally:
+            conn.close()
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(18, 18, 18, 18)
+        root.setSpacing(12)
+
+        header = QHBoxLayout()
+        title = QLabel("Character Profile")
+        title.setObjectName("overlay-title")
+        header.addWidget(title)
+        header.addStretch(1)
+        close_btn = QPushButton("×")
+        close_btn.setObjectName("close")
+        close_btn.clicked.connect(self.reject)
+        header.addWidget(close_btn)
+        root.addLayout(header)
+
+        self.tabs = QTabWidget()
+        root.addWidget(self.tabs, stretch=1)
+
+        # Identity tab
+        identity = QWidget()
+        identity_layout = QFormLayout(identity)
+        identity_layout.setSpacing(10)
+        identity_layout.setContentsMargins(14, 14, 14, 14)
+        self.name_input = QLineEdit()
+        self.role_input = QComboBox()
+        self.role_input.setEditable(True)
+        for role in CHARACTER_ROLE_OPTIONS:
+            self.role_input.addItem(role)
+        self.archetype_input = QLineEdit()
+        self.description_input = QTextEdit()
+        self.description_input.setMinimumHeight(180)
+        identity_layout.addRow("Name", self.name_input)
+        identity_layout.addRow("Role", self.role_input)
+        identity_layout.addRow("Archetype", self.archetype_input)
+        identity_layout.addRow("Description", self.description_input)
+        self.tabs.addTab(identity, "Identity")
+
+        # Relationships tab
+        relationships_tab = QWidget()
+        relationships_layout = QVBoxLayout(relationships_tab)
+        relationships_layout.setContentsMargins(12, 12, 12, 12)
+        relationships_layout.setSpacing(8)
+        rel_scroll = QScrollArea()
+        rel_scroll.setWidgetResizable(True)
+        rel_host = QWidget()
+        self._relationships_form = QFormLayout(rel_host)
+        self._relationships_form.setSpacing(8)
+        self._relationships_form.setContentsMargins(4, 4, 4, 4)
+        rel_scroll.setWidget(rel_host)
+        relationships_layout.addWidget(rel_scroll)
+        self.tabs.addTab(relationships_tab, "Relationships")
+        self._build_relationship_rows()
+
+        # Arc tab
+        arc_tab = QWidget()
+        arc_layout = QVBoxLayout(arc_tab)
+        arc_layout.setContentsMargins(12, 12, 12, 12)
+        arc_layout.setSpacing(8)
+        arc_scroll = QScrollArea()
+        arc_scroll.setWidgetResizable(True)
+        arc_host = QWidget()
+        self._arc_container = QVBoxLayout(arc_host)
+        self._arc_container.setSpacing(10)
+        self._arc_container.setContentsMargins(4, 4, 4, 4)
+        arc_scroll.setWidget(arc_host)
+        arc_layout.addWidget(arc_scroll)
+        self.tabs.addTab(arc_tab, "Arc")
+        self._build_arc_sections()
+
+        controls = QHBoxLayout()
+        controls.addStretch(1)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("secondary")
+        cancel_btn.clicked.connect(self.reject)
+        save_btn = QPushButton("Save Character")
+        save_btn.setObjectName("primary")
+        save_btn.clicked.connect(self._save_character)
+        controls.addWidget(cancel_btn)
+        controls.addWidget(save_btn)
+        root.addLayout(controls)
+
+    def _build_relationship_rows(self) -> None:
+        while self._relationships_form.rowCount() > 0:
+            self._relationships_form.removeRow(0)
+        self._relationship_inputs.clear()
+
+        for related_id, related_name in self._character_rows:
+            if self._character_id is not None and related_id == self._character_id:
+                continue
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(8)
+            tag_input = QComboBox()
+            for option in CHARACTER_RELATIONSHIP_OPTIONS:
+                tag_input.addItem(option)
+            note_input = QLineEdit()
+            note_input.setPlaceholderText("connection note")
+            row_layout.addWidget(tag_input)
+            row_layout.addWidget(note_input, stretch=1)
+            self._relationships_form.addRow(related_name, row)
+            self._relationship_inputs[related_id] = (tag_input, note_input)
+
+    def _build_arc_sections(self) -> None:
+        while self._arc_container.count() > 0:
+            item = self._arc_container.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        self._arc_section_lists.clear()
+
+        sections = [
+            ("used", "Past"),
+            ("active", "Active"),
+            ("idea", "Intended"),
+        ]
+        for key, title in sections:
+            panel = QFrame()
+            panel.setObjectName("arc-section")
+            panel_layout = QVBoxLayout(panel)
+            panel_layout.setContentsMargins(10, 10, 10, 10)
+            panel_layout.setSpacing(8)
+
+            title_label = QLabel(title)
+            title_label.setObjectName("arc-section-title")
+            panel_layout.addWidget(title_label)
+
+            rows = QVBoxLayout()
+            rows.setSpacing(6)
+            panel_layout.addLayout(rows)
+            empty = QLabel("No beats yet.")
+            empty.setObjectName("arc-empty")
+            rows.addWidget(empty)
+
+            self._arc_section_lists[key] = rows
+            self._arc_container.addWidget(panel)
+        self._arc_container.addStretch(1)
+
+    def _clear_arc_section(self, layout: QVBoxLayout) -> None:
+        while layout.count() > 0:
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _load_arc_from_beats(self, character_id: int) -> None:
+        for rows in self._arc_section_lists.values():
+            self._clear_arc_section(rows)
+
+        conn = sqlite3.connect(self._db_path)
+        try:
+            ensure_vault_schema(conn)
+            beat_rows = conn.execute(
+                """
+                SELECT b.id, b.text, b.status, ch.title
+                FROM beats b
+                JOIN beat_characters bc ON bc.beat_id = b.id
+                LEFT JOIN chapters ch ON ch.id = b.chapter_id
+                WHERE bc.character_id = ?
+                ORDER BY
+                    CASE b.status
+                        WHEN 'used' THEN 0
+                        WHEN 'active' THEN 1
+                        ELSE 2
+                    END,
+                    b.updated_at DESC,
+                    b.id DESC
+                """,
+                (character_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        grouped: dict[str, list[tuple[int, str, str]]] = {"used": [], "active": [], "idea": []}
+        for beat_id, beat_text, beat_status, chapter_title in beat_rows:
+            status = str(beat_status or "idea")
+            if status not in grouped:
+                status = "idea"
+            grouped[status].append((int(beat_id), str(beat_text or ""), str(chapter_title or "")))
+
+        for status, rows in grouped.items():
+            target = self._arc_section_lists.get(status)
+            if target is None:
+                continue
+            if not rows:
+                empty = QLabel("No beats yet.")
+                empty.setObjectName("arc-empty")
+                target.addWidget(empty)
+                continue
+            for beat_id, beat_text, chapter_title in rows:
+                card = QFrame()
+                card.setObjectName("arc-item")
+                card_layout = QVBoxLayout(card)
+                card_layout.setContentsMargins(8, 6, 8, 6)
+                card_layout.setSpacing(4)
+
+                title = QLabel(beat_text)
+                title.setWordWrap(True)
+                card_layout.addWidget(title)
+
+                meta = f"Beat #{beat_id}"
+                if chapter_title:
+                    meta += f" · {chapter_title}"
+                meta_label = QLabel(meta)
+                meta_label.setObjectName("arc-item-meta")
+                card_layout.addWidget(meta_label)
+
+                target.addWidget(card)
+
+    def _load_character_data(self, character_id: int) -> None:
+        conn = sqlite3.connect(self._db_path)
+        try:
+            ensure_vault_schema(conn)
+            row = conn.execute(
+                """
+                SELECT name, role, archetype, description
+                FROM characters
+                WHERE id = ?
+                """,
+                (character_id,),
+            ).fetchone()
+            if row:
+                self.name_input.setText(str(row[0] or ""))
+                self.role_input.setCurrentText(str(row[1] or ""))
+                self.archetype_input.setText(str(row[2] or ""))
+                self.description_input.setPlainText(str(row[3] or ""))
+
+            relationship_rows = conn.execute(
+                """
+                SELECT related_id, tag, note
+                FROM character_relationships
+                WHERE character_id = ?
+                """,
+                (character_id,),
+            ).fetchall()
+            for related_id, tag, note in relationship_rows:
+                inputs = self._relationship_inputs.get(int(related_id))
+                if not inputs:
+                    continue
+                tag_input, note_input = inputs
+                tag_input.setCurrentText(str(tag or "neutral"))
+                note_input.setText(str(note or ""))
+        finally:
+            conn.close()
+        self._load_arc_from_beats(character_id)
+
+    def _save_character(self) -> None:
+        name = self.name_input.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Character", "Name is required.")
+            return
+        role = self.role_input.currentText().strip()
+        archetype = self.archetype_input.text().strip()
+        description = self.description_input.toPlainText().strip()
+
+        conn = sqlite3.connect(self._db_path)
+        try:
+            ensure_vault_schema(conn)
+            if self._character_id is None:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO characters (name, role, archetype, description)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (name, role, archetype, description),
+                )
+                character_id = int(cursor.lastrowid)
+            else:
+                character_id = self._character_id
+                conn.execute(
+                    """
+                    UPDATE characters
+                    SET name = ?, role = ?, archetype = ?, description = ?
+                    WHERE id = ?
+                    """,
+                    (name, role, archetype, description, character_id),
+                )
+
+            conn.execute(
+                "DELETE FROM character_relationships WHERE character_id = ?",
+                (character_id,),
+            )
+            for related_id, (tag_input, note_input) in self._relationship_inputs.items():
+                tag = tag_input.currentText().strip().lower() or "neutral"
+                note = note_input.text().strip()
+                if tag == "neutral" and not note:
+                    continue
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO character_relationships
+                        (character_id, related_id, tag, note)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (character_id, related_id, tag, note),
+                )
+
+            conn.commit()
+            self._saved_character_id = character_id
+        except sqlite3.IntegrityError:
+            QMessageBox.warning(self, "Character", "A character with that name already exists.")
+            return
+        finally:
+            conn.close()
+        self.accept()
+
+
+class CharacterRosterDialog(QDialog):
+    def __init__(
+        self,
+        db_path: Path,
+        on_open_profile: callable,
+        on_new_character: callable,
+        on_roster_changed: callable,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._db_path = db_path
+        self._on_open_profile = on_open_profile
+        self._on_new_character = on_new_character
+        self._on_roster_changed = on_roster_changed
+
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setModal(True)
+        self.resize(920, 620)
+        self.setStyleSheet(
+            """
+            QDialog {
+                background-color: #E6E5E6;
+                border: 1px solid #BCA67A;
+                border-radius: 10px;
+            }
+            QLabel#overlay-title {
+                color: #2B2B2B;
+                font-family: "Georgia", serif;
+                font-size: 18px;
+            }
+            QLabel#empty-roster {
+                color: #2B2B2B;
+                font-family: "Georgia", serif;
+                font-size: 13px;
+                padding: 18px;
+                border: 1px dashed #BCA67A;
+                border-radius: 8px;
+            }
+            QPushButton#toolbar, QPushButton#close {
+                background-color: transparent;
+                color: #2B2B2B;
+                border: 1px solid #BCA67A;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-family: "Georgia", serif;
+                font-size: 12px;
+            }
+            QPushButton#toolbar:hover, QPushButton#close:hover {
+                background-color: #DBD9D8;
+            }
+            QPushButton#new {
+                background-color: #6BBF9B;
+                color: #2B2B2B;
+                border: 1px solid #3e8a6c;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-family: "Georgia", serif;
+                font-size: 12px;
+            }
+            QPushButton#new:hover {
+                background-color: #7fcfaf;
+            }
+            QPushButton#character-card {
+                background-color: #F2F1F0;
+                color: #2B2B2B;
+                border: 1px solid #BCA67A;
+                border-radius: 8px;
+                padding: 12px;
+                text-align: left;
+                font-family: "Georgia", serif;
+                font-size: 12px;
+            }
+            QPushButton#character-card:hover {
+                border-color: #6BBF9B;
+                background-color: #f6f5f4;
+            }
+            """
+        )
+        self._build_ui()
+        self._refresh_cards()
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.reject()
+            return
+        super().keyPressEvent(event)
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(18, 18, 18, 18)
+        root.setSpacing(12)
+
+        header = QHBoxLayout()
+        title = QLabel("Character Roster")
+        title.setObjectName("overlay-title")
+        header.addWidget(title)
+        header.addStretch(1)
+        import_btn = QPushButton("Import from Shadow Bible")
+        import_btn.setObjectName("toolbar")
+        import_btn.clicked.connect(self._import_from_shadow_bible)
+        header.addWidget(import_btn)
+        new_btn = QPushButton("+ New Character")
+        new_btn.setObjectName("new")
+        new_btn.clicked.connect(self._open_new_character)
+        header.addWidget(new_btn)
+        close_btn = QPushButton("Close")
+        close_btn.setObjectName("close")
+        close_btn.clicked.connect(self.reject)
+        header.addWidget(close_btn)
+        root.addLayout(header)
+
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._host = QWidget()
+        self._grid = QGridLayout(self._host)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setHorizontalSpacing(10)
+        self._grid.setVerticalSpacing(10)
+        self._scroll.setWidget(self._host)
+        root.addWidget(self._scroll, stretch=1)
+
+    def _fetch_roster_rows(self) -> list[dict[str, object]]:
+        conn = sqlite3.connect(self._db_path)
+        try:
+            ensure_vault_schema(conn)
+            characters = conn.execute(
+                """
+                SELECT id, name, role, archetype
+                FROM characters
+                ORDER BY name COLLATE NOCASE
+                """
+            ).fetchall()
+            relationship_rows = conn.execute(
+                """
+                SELECT cr.character_id, cr.tag, c.name
+                FROM character_relationships cr
+                JOIN characters c ON c.id = cr.related_id
+                ORDER BY c.name COLLATE NOCASE
+                """
+            ).fetchall()
+        finally:
+            conn.close()
+
+        relationship_map: dict[int, list[tuple[str, str]]] = {}
+        for character_id, tag, related_name in relationship_rows:
+            relationship_map.setdefault(int(character_id), []).append(
+                (str(tag or "").strip().lower(), str(related_name))
+            )
+
+        rows: list[dict[str, object]] = []
+        for character_id, name, role, archetype in characters:
+            rel_summary = self._build_relationship_summary(
+                relationship_map.get(int(character_id), [])
+            )
+            role_value = str(role or "").strip()
+            archetype_value = str(archetype or "").strip()
+            if role_value and archetype_value:
+                role_line = f"{role_value} · {archetype_value}"
+            else:
+                role_line = role_value or archetype_value or "supporting"
+            rows.append(
+                {
+                    "id": int(character_id),
+                    "name": str(name),
+                    "role_line": role_line,
+                    "relationships": rel_summary,
+                }
+            )
+        return rows
+
+    @staticmethod
+    def _build_relationship_summary(relationships: list[tuple[str, str]]) -> str:
+        parts: list[str] = []
+        for tag, related_name in relationships:
+            if not tag or tag == "neutral":
+                continue
+            parts.append(f"{tag} of {related_name}")
+            if len(parts) >= 3:
+                break
+        if not parts:
+            return "No key relationships yet."
+        return " · ".join(parts)
+
+    def _clear_grid(self) -> None:
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _refresh_cards(self) -> None:
+        self._clear_grid()
+        rows = self._fetch_roster_rows()
+        if not rows:
+            empty = QLabel("No characters yet. Add one or import from the Shadow Bible.")
+            empty.setObjectName("empty-roster")
+            self._grid.addWidget(empty, 0, 0, 1, 3)
+            return
+
+        columns = 3
+        for index, row in enumerate(rows):
+            card = QPushButton(
+                f"{row['name']}\n{row['role_line']}\n{row['relationships']}"
+            )
+            card.setObjectName("character-card")
+            card.setMinimumHeight(140)
+            card.clicked.connect(
+                lambda _checked=False, cid=int(row["id"]): self._open_profile(cid)
+            )
+            grid_row = index // columns
+            grid_col = index % columns
+            self._grid.addWidget(card, grid_row, grid_col)
+
+    def _open_profile(self, character_id: int) -> None:
+        self.accept()
+        self._on_open_profile(character_id)
+
+    def _open_new_character(self) -> None:
+        self.accept()
+        self._on_new_character()
+
+    def _import_from_shadow_bible(self) -> None:
+        imported = 0
+        conn = sqlite3.connect(self._db_path)
+        try:
+            ensure_vault_schema(conn)
+            rows = conn.execute(
+                """
+                SELECT DISTINCT trim(name)
+                FROM entities
+                WHERE type = 'PERSON' AND trim(name) <> ''
+                ORDER BY name COLLATE NOCASE
+                """
+            ).fetchall()
+            for (name_value,) in rows:
+                name = str(name_value).strip()
+                exists = conn.execute(
+                    "SELECT 1 FROM characters WHERE lower(name) = lower(?) LIMIT 1",
+                    (name,),
+                ).fetchone()
+                if exists:
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO characters (name, role, archetype, description)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (name, "supporting", "", ""),
+                )
+                imported += 1
+            conn.commit()
+        finally:
+            conn.close()
+
+        if imported:
+            self._on_roster_changed()
+            self._refresh_cards()
+        QMessageBox.information(
+            self,
+            "Import Complete",
+            f"Imported {imported} character(s) from the Shadow Bible.",
+        )
 
 
 class LibraryDialog(QDialog):
@@ -2095,7 +3609,7 @@ class CompanionReviewPanel(QWidget):
         notes_data = self._get_notes()
 
         if not notes_data:
-            empty_label = QLabel("No companion notes yet.\nPress Ctrl+Shift+C to capture a thought.")
+            empty_label = QLabel("No companion notes yet.")
             empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty_label.setStyleSheet(f"""
                 color: {TEXT_FAINT};
@@ -2479,10 +3993,9 @@ class HearthWindow(QMainWindow):
         self._logged_writing_dates: set[str] = set()
         self._chapter_notes: list[dict[str, object]] = []
         self._active_note_id: int | None = None
-        self._focus_mode = False
-        self._focus_restore_state: dict[str, bool] = {}
         self._companion_capture_cursor: QTextCursor | None = None
         self._suspend_note_offset_updates = False
+        self._fullscreen_reveal_strip_px = 1
 
         # Exhale feature state
         self._exhale_target: int | None = None
@@ -2510,7 +4023,7 @@ class HearthWindow(QMainWindow):
             warning_callback=self._show_nonblocking_warning,
             logger=LOGGER,
         )
-        self._annotation_manager.set_notes_panel(self._notes_panel)
+        self._annotation_manager.set_notes_panel(None)
         self._setup_editor()
         self._ensure_project()
         self._scan_finished_signal.connect(self._on_scan_future_finished)
@@ -2518,7 +4031,15 @@ class HearthWindow(QMainWindow):
         self._init_timers()
 
     def _setup_ui(self) -> None:
-        self.title_bar = TitleBar(self, self._open_project_manager, self._toggle_constellation)
+        self.title_bar = TitleBar(
+            self,
+            self._toggle_navigation_drawer,
+            self._open_project_manager,
+            self._toggle_navigation_drawer,
+            self._toggle_beats_panel,
+            self._toggle_constellation,
+            self._toggle_full_screen,
+        )
         self.status_bar = StatusBar(self)
 
         self.editor = QTextEdit()
@@ -2542,64 +4063,86 @@ class HearthWindow(QMainWindow):
 
         self.shell = TypewriterShell(self.editor)
 
-        central = QWidget()
-        central.setObjectName("central-shell")
+        self._central_shell = QWidget()
+        self._central_shell.setObjectName("central-shell")
         # Rounded corners on the central shell for a softer appearance
-        central.setStyleSheet(f"""
+        self._central_shell.setStyleSheet(f"""
             QWidget#central-shell {{
                 background: {APP_BG};
                 border-radius: {BORDER_RADIUS};
             }}
         """)
-        self.setCentralWidget(central)
+        self.setCentralWidget(self._central_shell)
 
-        main_layout = QVBoxLayout(central)
+        main_layout = QVBoxLayout(self._central_shell)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         main_layout.addWidget(self.title_bar)
         main_layout.addWidget(self.shell, stretch=1)
         main_layout.addWidget(self.status_bar)
 
+        # Fullscreen top-strip reveal relies on mouse movement across the shell/editor.
+        for widget in (
+            self._central_shell,
+            self.shell,
+            self.editor.viewport(),
+            self.title_bar,
+        ):
+            widget.setMouseTracking(True)
+            widget.installEventFilter(self)
+
         self._chapters_panel = ChaptersPanel(
             self._on_chapter_selected,
             self._new_chapter,
             self._delete_chapter,
         )
-        self._chapters_dock = QDockWidget("Chapters", self)
-        self._chapters_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea)
-        self._chapters_dock.setWidget(self._chapters_panel)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._chapters_dock)
 
         self._storylines_panel = StorylinesPanel(
             self._on_storyline_toggled,
             self._new_storyline,
         )
-        self._storylines_dock = QDockWidget("Storylines", self)
-        self._storylines_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea)
-        self._storylines_dock.setWidget(self._storylines_panel)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._storylines_dock)
+        self._navigation_panel = QWidget(self)
+        self._navigation_panel.setObjectName("navigation-drawer-panel")
+        navigation_layout = QVBoxLayout(self._navigation_panel)
+        navigation_layout.setContentsMargins(0, 0, 0, 0)
+        navigation_layout.setSpacing(8)
+        navigation_layout.addWidget(self._chapters_panel, stretch=3)
+        navigation_layout.addWidget(self._storylines_panel, stretch=2)
+        self._navigation_drawer = DrawerOverlay(
+            self._central_shell,
+            edge="left",
+            drawer_width=360,
+        )
+        self._navigation_drawer.set_panel_widget(self._navigation_panel)
 
         self._outliner_panel = OutlinerPanel(
-            self._select_chapter,
+            self._select_chapter_from_outliner,
             self._new_chapter,
             self._delete_chapter,
             self._reorder_chapters_from_outliner,
             self._update_chapter_synopsis,
+            self._set_scene_characters,
         )
-        self._outliner_dock = QDockWidget("Outliner", self)
-        self._outliner_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-        self._outliner_dock.setWidget(self._outliner_panel)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._outliner_dock)
+        self._outliner_drawer = DrawerOverlay(
+            self._central_shell,
+            edge="right",
+            drawer_width=460,
+        )
+        self._outliner_drawer.set_panel_widget(self._outliner_panel)
 
-        self._notes_panel = NotesPanel(
-            self._focus_note_from_panel,
-            self._edit_note_from_panel,
-            self._delete_note_from_panel,
+        self._beats_panel = BeatsPanel(
+            self._add_beat,
+            self._open_beat,
+            self._assign_beat_to_current_chapter,
+            self._mark_beat_used,
+            self._refresh_beats_panel,
         )
-        self._notes_dock = QDockWidget("Notes", self)
-        self._notes_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-        self._notes_dock.setWidget(self._notes_panel)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._notes_dock)
+        self._beats_drawer = DrawerOverlay(
+            self._central_shell,
+            edge="right",
+            drawer_width=430,
+        )
+        self._beats_drawer.set_panel_widget(self._beats_panel)
 
         self._constellation_dock = QDockWidget("Spiral Constellation", self)
         self._constellation_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
@@ -2641,44 +4184,72 @@ class HearthWindow(QMainWindow):
 
         self._apply_styles()
         self._setup_fade_targets()
+        self._sync_drawer_geometry()
 
         self._actions_menu = QMenu(self)
-        self._actions_menu.addAction("Library / Index", self._open_library)
-        self._actions_menu.addAction("Toggle Outliner", self._toggle_outliner)
-        self._actions_menu.addAction("Toggle Notes", self._toggle_notes)
         self._actions_menu.addAction("Sparks (Ctrl+Shift+S)", self._toggle_sparks)
-        self._actions_menu.addAction("Companion Doc Review (Ctrl+Shift+D)", self._toggle_companion_review)
-        self._actions_menu.addAction("Add Note (Ctrl+Shift+N)", self._add_inline_note_from_selection)
+        self._actions_menu.addAction("Companion Doc (Ctrl+Shift+C)", self._toggle_companion_review)
+        self._actions_menu.addAction("Exhale (Ctrl+Shift+E)", self._set_exhale)
         self._actions_menu.addSeparator()
-        self._actions_menu.addAction("Ingest Voice Notes", self._ingest_voice_notes)
-        self._actions_menu.addAction("Rebuild Index.json", self._rebuild_index)
+        self._export_menu = self._actions_menu.addMenu("Export Project")
+        self._export_menu.addAction("Markdown", self._export_markdown)
+        self._export_menu.addAction("PDF", self._export_pdf)
+        self._actions_menu.addAction("Project Settings", self._open_project_manager)
         self._actions_menu.addSeparator()
-        self._actions_menu.addAction("Toggle Focus Mode (F11)", self._toggle_focus_mode)
-        self._actions_menu.addSeparator()
-        self._actions_menu.addAction("Set Exhale (Ctrl+Shift+E)", self._set_exhale)
-        self._actions_menu.addSeparator()
-        self._settings_menu = self._actions_menu.addMenu("Editor Settings")
+        self._settings_menu = self._actions_menu.addMenu("Preferences")
         self._build_editor_settings_menu()
         self._actions_menu.addSeparator()
+        self._actions_menu.addAction("Library / Index", self._open_library)
+        self._actions_menu.addAction("Add Note", self._add_inline_note_from_selection)
+        self._actions_menu.addAction("Ingest Voice Notes", self._ingest_voice_notes)
+        self._actions_menu.addAction("Rebuild Index.json", self._rebuild_index)
         self._actions_menu.addAction("Generate Character Palette", self._generate_character_palette)
-        self._actions_menu.addAction("Export Markdown", self._export_markdown)
-        self._actions_menu.addAction("Export PDF", self._export_pdf)
         self.title_bar.actions_button.setMenu(self._actions_menu)
 
+        self._characters_menu = QMenu(self)
+        self._characters_menu.addAction("Roster", self._open_character_roster)
+        self._characters_menu.addAction("+ New Character", self._open_new_character_profile)
+        self.title_bar.characters_button.setMenu(self._characters_menu)
+
+        self._shortcut_navigation = QShortcut(
+            QKeySequence("Ctrl+\\"),
+            self,
+            activated=self._toggle_navigation_drawer,
+        )
+        self._shortcut_outliner = QShortcut(
+            QKeySequence("Ctrl+Shift+O"),
+            self,
+            activated=self._toggle_outliner,
+        )
+        self._shortcut_beats_panel = QShortcut(
+            QKeySequence("Ctrl+Shift+B"),
+            self,
+            activated=self._toggle_beats_panel,
+        )
+        self._shortcut_new_beat = QShortcut(
+            QKeySequence("Ctrl+Shift+N"),
+            self,
+            activated=self._quick_capture_beat,
+        )
+        self._shortcut_characters = QShortcut(
+            QKeySequence("Ctrl+Shift+H"),
+            self,
+            activated=self._open_character_roster,
+        )
         self._shortcut_constellation = QShortcut(
-            QKeySequence("Ctrl+M"),
+            QKeySequence("Ctrl+Shift+X"),
             self,
             activated=self._toggle_constellation,
         )
-        self._shortcut_focus_mode = QShortcut(
+        self._shortcut_full_screen = QShortcut(
             QKeySequence("F11"),
             self,
-            activated=self._toggle_focus_mode,
+            activated=self._toggle_full_screen,
         )
-        self._shortcut_add_note = QShortcut(
-            QKeySequence("Ctrl+Shift+N"),
-            self.editor,
-            activated=self._add_inline_note_from_selection,
+        self._shortcut_exit_full_screen = QShortcut(
+            QKeySequence("Escape"),
+            self,
+            activated=self._handle_escape,
         )
         self._shortcut_exhale = QShortcut(
             QKeySequence("Ctrl+Shift+E"),
@@ -2690,16 +4261,17 @@ class HearthWindow(QMainWindow):
             self,
             activated=self._toggle_sparks,
         )
-        self._shortcut_companion_capture = QShortcut(
+        self._shortcut_companion = QShortcut(
             QKeySequence("Ctrl+Shift+C"),
-            self,
-            activated=self._open_companion_capture,
-        )
-        self._shortcut_companion_review = QShortcut(
-            QKeySequence("Ctrl+Shift+D"),
             self,
             activated=self._toggle_companion_review,
         )
+        self._shortcut_save = QShortcut(
+            QKeySequence("Ctrl+S"),
+            self,
+            activated=self._manual_save,
+        )
+        self._sync_full_screen_controls()
 
     def _apply_styles(self) -> None:
         # Title bar — dark academia manuscript header
@@ -2716,19 +4288,31 @@ class HearthWindow(QMainWindow):
                 letter-spacing: 0.05em;
                 color: {ACCENT_GOLD};
             }}
-            QLabel#project-label {{
+            QLabel#top-separator {{
                 font-family: "Georgia", serif;
-                font-size: 13px;
-                color: {TEXT_SECONDARY};
-                padding-left: 8px;
-            }}
-            QLabel#scan-status-label {{
-                font-family: "Georgia", "Courier New", monospace;
                 font-size: 11px;
                 color: {TEXT_FAINT};
-                padding-left: 8px;
+                padding: 0 2px;
             }}
-            QPushButton#project-button, QPushButton#map-button, QPushButton#actions-button {{
+            QLabel#session-meta-label {{
+                font-family: "Georgia", serif;
+                font-size: 11px;
+                color: {TEXT_FAINT};
+                padding: 0 8px 0 4px;
+            }}
+            QPushButton#project-button, QPushButton#chapter-button {{
+                background-color: transparent;
+                color: {TEXT_SECONDARY};
+                border: none;
+                padding: 2px 4px;
+                font-family: "Georgia", serif;
+                font-size: 13px;
+                text-align: left;
+            }}
+            QPushButton#project-button:hover, QPushButton#chapter-button:hover {{
+                color: {TEXT_PRIMARY};
+            }}
+            QPushButton#nav-button, QPushButton#beats-button, QPushButton#constellation-button, QPushButton#characters-button, QPushButton#actions-button, QPushButton#fullscreen-button {{
                 background-color: transparent;
                 color: {TEXT_SECONDARY};
                 border: 1px solid {BORDER_SOFT};
@@ -2737,13 +4321,13 @@ class HearthWindow(QMainWindow):
                 font-family: "Georgia", serif;
                 font-size: 12px;
             }}
-            QPushButton#project-button:hover, QPushButton#map-button:hover, QPushButton#actions-button:hover {{
+            QPushButton#nav-button:hover, QPushButton#beats-button:hover, QPushButton#constellation-button:hover, QPushButton#characters-button:hover, QPushButton#actions-button:hover, QPushButton#fullscreen-button:hover {{
                 background-color: {BG_CARD};
                 color: {TEXT_PRIMARY};
                 border-color: {SCROLLBAR_HANDLE};
             }}
-            QPushButton#project-button:pressed, QPushButton#map-button:pressed, QPushButton#actions-button:pressed,
-            QPushButton#project-button:checked, QPushButton#map-button:checked, QPushButton#actions-button:checked {{
+            QPushButton#nav-button:pressed, QPushButton#beats-button:pressed, QPushButton#constellation-button:pressed, QPushButton#characters-button:pressed, QPushButton#actions-button:pressed, QPushButton#fullscreen-button:pressed,
+            QPushButton#nav-button:checked, QPushButton#beats-button:checked, QPushButton#constellation-button:checked, QPushButton#characters-button:checked, QPushButton#actions-button:checked, QPushButton#fullscreen-button:checked {{
                 background-color: {SELECTION_BG};
                 color: {ACCENT_GOLD};
                 border-color: {ACCENT_GOLD_DIM};
@@ -2777,7 +4361,7 @@ class HearthWindow(QMainWindow):
         )
         # Sidebar panels — soft rounded journal tabs
         panel_style = f"""
-            QWidget#chapters-panel, QWidget#storylines-panel, QWidget#outliner-panel, QWidget#notes-panel {{
+            QWidget#chapters-panel, QWidget#storylines-panel, QWidget#outliner-panel, QWidget#beats-panel {{
                 background-color: {BG_PANEL};
                 border-right: 1px solid {BORDER_SOFT};
                 padding: 8px;
@@ -2836,9 +4420,22 @@ class HearthWindow(QMainWindow):
             self._chapters_panel,
             self._storylines_panel,
             self._outliner_panel,
-            self._notes_panel,
+            self._beats_panel,
         ):
             panel.setStyleSheet(panel_style)
+
+        drawer_style = f"""
+            QWidget#left-drawer-overlay, QWidget#right-drawer-overlay {{
+                background-color: rgba(10, 8, 6, 120);
+            }}
+            QFrame#drawer-panel {{
+                background-color: {BG_PANEL};
+                border: 1px solid {BORDER_SOFT};
+            }}
+        """
+        self._navigation_drawer.setStyleSheet(drawer_style)
+        self._outliner_drawer.setStyleSheet(drawer_style)
+        self._beats_drawer.setStyleSheet(drawer_style)
 
         # Dock widget styling — soft headers
         dock_style = f"""
@@ -2863,12 +4460,49 @@ class HearthWindow(QMainWindow):
         """
         self._constellation_dock.setStyleSheet(dock_style)
         for dock in (
-            self._chapters_dock,
-            self._storylines_dock,
-            self._outliner_dock,
-            self._notes_dock,
+            self._sparks_dock,
+            self._companion_dock,
         ):
             dock.setStyleSheet(dock_style)
+
+    def _sync_drawer_geometry(self) -> None:
+        if not all(
+            hasattr(self, name)
+            for name in ("_central_shell", "_navigation_drawer", "_outliner_drawer", "_beats_drawer")
+        ):
+            return
+        top = self.title_bar.height() if self.title_bar.isVisible() else 0
+        bottom = self.status_bar.height() if self.status_bar.isVisible() else 0
+        height = max(0, self._central_shell.height() - top - bottom)
+        width = self._central_shell.width()
+        for drawer in (self._navigation_drawer, self._outliner_drawer, self._beats_drawer):
+            drawer.setGeometry(0, top, width, height)
+            drawer.raise_()
+
+    def _hide_drawers(self, *, except_drawer: DrawerOverlay | None = None) -> None:
+        if not all(
+            hasattr(self, name)
+            for name in ("_navigation_drawer", "_outliner_drawer", "_beats_drawer")
+        ):
+            return
+        if except_drawer is not self._navigation_drawer:
+            self._navigation_drawer.hide_drawer()
+        if except_drawer is not self._outliner_drawer:
+            self._outliner_drawer.hide_drawer()
+        if except_drawer is not self._beats_drawer:
+            self._beats_drawer.hide_drawer()
+
+    def _toggle_navigation_drawer(self) -> None:
+        if self._navigation_drawer.is_open():
+            self._navigation_drawer.hide_drawer()
+            return
+        self._hide_drawers(except_drawer=self._navigation_drawer)
+        self._navigation_drawer.show_drawer()
+        self._chapters_panel.list.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
+
+    def _select_chapter_from_outliner(self, chapter_id: int) -> None:
+        self._select_chapter(chapter_id)
+        self._outliner_drawer.hide_drawer()
 
     def _setup_editor(self) -> None:
         self._apply_editor_font()
@@ -2886,6 +4520,7 @@ class HearthWindow(QMainWindow):
             QApplication.instance().quit()
 
     def _open_project_manager(self) -> bool:
+        self._hide_drawers()
         dialog = ProjectManagerDialog(PROJECTS_ROOT, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return False
@@ -2926,6 +4561,8 @@ class HearthWindow(QMainWindow):
         self._exhale_target = None
         self._exhale_session_baseline = None
         self._exhale_completed = False
+
+        self._hide_drawers()
 
         # Reset Sparks panel on project load
         if self._sparks_dock is not None:
@@ -3168,12 +4805,20 @@ class HearthWindow(QMainWindow):
 
     def _setup_fade_targets(self) -> None:
         self._fade_targets = [
+            self.title_bar.nav_button,
             self.title_bar.project_button,
-            self.title_bar.map_button,
+            self.title_bar.chapter_button,
+            self.title_bar.beats_button,
+            self.title_bar.constellation_button,
+            self.title_bar.characters_button,
             self.title_bar.actions_button,
+            self.title_bar.fullscreen_button,
             self.title_bar.min_button,
             self.title_bar.close_button,
             self.status_bar,
+            self._navigation_drawer,
+            self._outliner_drawer,
+            self._beats_drawer,
         ]
         self._fade_effects: dict[QWidget, QGraphicsOpacityEffect] = {}
         for widget in self._fade_targets:
@@ -3257,6 +4902,12 @@ class HearthWindow(QMainWindow):
         self._load_outliner()
         if self._chapters_panel.list.count() > 0:
             self._chapters_panel.list.setCurrentRow(0)
+        else:
+            self._current_chapter_id = None
+            self._current_chapter_path = None
+            self.title_bar.set_chapter_name("No Chapter")
+            self.title_bar.set_session_meta(save_state="saved", word_count=0)
+        self._refresh_beats_panel()
 
     def _select_chapter(self, chapter_id: int) -> None:
         for item_index in range(self._chapters_panel.list.count()):
@@ -3270,6 +4921,7 @@ class HearthWindow(QMainWindow):
             if chap_id == chapter_id:
                 self._current_chapter_id = chap_id
                 self._current_chapter_path = path
+                self.title_bar.set_chapter_name(title)
                 self._load_draft()
                 self._load_notes_for_current_chapter()
                 self._load_storylines()
@@ -3284,6 +4936,7 @@ class HearthWindow(QMainWindow):
         if chapter_id == self._current_chapter_id:
             return
         self._select_chapter(int(chapter_id))
+        self._navigation_drawer.hide_drawer()
 
     def _new_chapter(self) -> None:
         if not self._db_path or not self._chapters_dir:
@@ -3341,11 +4994,390 @@ class HearthWindow(QMainWindow):
         selected = self._fetch_chapter_storylines(self._current_chapter_id)
         self._storylines_panel.set_storylines(storylines, selected)
         self._load_outliner()
+        self._refresh_beats_panel()
+
+    @staticmethod
+    def _split_character_names(raw: str | None) -> list[str]:
+        if not raw:
+            return []
+        return [chunk for chunk in raw.split("\x1f") if chunk]
+
+    def _fetch_beats(self, status: str | None = None, character_id: int | None = None) -> list[dict[str, object]]:
+        if not self._db_path:
+            return []
+        normalized_status = status if status in {"idea", "active", "used"} else None
+        separator = "\x1f"
+        conn = sqlite3.connect(self._db_path)
+        try:
+            ensure_vault_schema(conn)
+            rows = conn.execute(
+                """
+                SELECT
+                    b.id,
+                    b.text,
+                    b.notes,
+                    b.status,
+                    b.chapter_id,
+                    ch.title,
+                    GROUP_CONCAT(c.name, ?)
+                FROM beats b
+                LEFT JOIN chapters ch ON ch.id = b.chapter_id
+                LEFT JOIN beat_characters bc ON bc.beat_id = b.id
+                LEFT JOIN characters c ON c.id = bc.character_id
+                WHERE (? IS NULL OR b.status = ?)
+                  AND (
+                        ? IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM beat_characters bc2
+                            WHERE bc2.beat_id = b.id
+                              AND bc2.character_id = ?
+                        )
+                  )
+                GROUP BY b.id
+                ORDER BY
+                    CASE b.status
+                        WHEN 'idea' THEN 0
+                        WHEN 'active' THEN 1
+                        ELSE 2
+                    END,
+                    b.updated_at DESC,
+                    b.id DESC
+                """,
+                (
+                    separator,
+                    normalized_status,
+                    normalized_status,
+                    character_id,
+                    character_id,
+                ),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        beats: list[dict[str, object]] = []
+        for beat_id, text, notes, beat_status, chapter_id, chapter_title, character_names in rows:
+            beats.append(
+                {
+                    "id": int(beat_id),
+                    "text": str(text or ""),
+                    "notes": str(notes or ""),
+                    "status": str(beat_status or "idea"),
+                    "chapter_id": int(chapter_id) if chapter_id is not None else None,
+                    "chapter_title": str(chapter_title or ""),
+                    "character_names": self._split_character_names(
+                        character_names if character_names is not None else None
+                    ),
+                }
+            )
+        return beats
+
+    def _fetch_beat_by_id(self, beat_id: int) -> dict[str, object] | None:
+        beats = self._fetch_beats()
+        for beat in beats:
+            if int(beat.get("id", 0)) == beat_id:
+                return beat
+        return None
+
+    def _fetch_beat_character_ids(self, beat_id: int) -> set[int]:
+        if not self._db_path:
+            return set()
+        conn = sqlite3.connect(self._db_path)
+        try:
+            rows = conn.execute(
+                "SELECT character_id FROM beat_characters WHERE beat_id = ?",
+                (beat_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return {int(row[0]) for row in rows}
+
+    def _chapter_name_for_current(self) -> str | None:
+        if self._current_chapter_id is None:
+            return None
+        for chapter_id, title, _path in self._chapters:
+            if chapter_id == self._current_chapter_id:
+                return title
+        return None
+
+    def _refresh_beats_panel(self) -> None:
+        if not hasattr(self, "_beats_panel"):
+            return
+        if not self._db_path:
+            self._beats_panel.set_character_options([])
+            self._beats_panel.set_context(None)
+            self._beats_panel.set_data(
+                global_beats=[],
+                chapter_active=[],
+                chapter_pool=[],
+                chapter_used=[],
+            )
+            return
+
+        characters = self._fetch_character_options()
+        self._beats_panel.set_character_options(characters)
+        chapter_name = self._chapter_name_for_current()
+        self._beats_panel.set_context(chapter_name)
+
+        character_filter = self._beats_panel.character_filter()
+        status_filter = self._beats_panel.status_filter()
+        global_beats = self._fetch_beats(status_filter, character_filter)
+
+        chapter_active: list[dict[str, object]] = []
+        chapter_pool: list[dict[str, object]] = []
+        chapter_used: list[dict[str, object]] = []
+        chapter_mode_rows = self._fetch_beats(None, character_filter)
+        for beat in chapter_mode_rows:
+            beat_status = str(beat.get("status") or "idea")
+            beat_chapter_id = beat.get("chapter_id")
+            if beat_status == "active" and beat_chapter_id == self._current_chapter_id:
+                chapter_active.append(beat)
+                continue
+            if beat_status == "used" and beat_chapter_id == self._current_chapter_id:
+                chapter_used.append(beat)
+                continue
+            if beat_status == "idea":
+                chapter_pool.append(beat)
+
+        self._beats_panel.set_data(
+            global_beats=global_beats,
+            chapter_active=chapter_active,
+            chapter_pool=chapter_pool,
+            chapter_used=chapter_used,
+        )
+
+    def _insert_beat(
+        self,
+        text: str,
+        *,
+        notes: str = "",
+        status: str = "idea",
+        chapter_id: int | None = None,
+        character_ids: set[int] | None = None,
+    ) -> int | None:
+        if not self._db_path:
+            return None
+        clean_text = text.strip()
+        if not clean_text:
+            return None
+        clean_status = status if status in {"idea", "active", "used"} else "idea"
+        clean_chapter_id = chapter_id if clean_status in {"active", "used"} else None
+        timestamp = local_timestamp()
+        conn = sqlite3.connect(self._db_path)
+        try:
+            ensure_vault_schema(conn)
+            cursor = conn.execute(
+                """
+                INSERT INTO beats (text, notes, status, chapter_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (clean_text, notes.strip(), clean_status, clean_chapter_id, timestamp, timestamp),
+            )
+            beat_id = int(cursor.lastrowid)
+            for character_id in sorted(character_ids or set()):
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO beat_characters (beat_id, character_id)
+                    VALUES (?, ?)
+                    """,
+                    (beat_id, character_id),
+                )
+            conn.commit()
+            return beat_id
+        finally:
+            conn.close()
+
+    def _update_beat(
+        self,
+        beat_id: int,
+        *,
+        text: str,
+        notes: str,
+        status: str,
+        chapter_id: int | None,
+        character_ids: set[int],
+    ) -> None:
+        if not self._db_path:
+            return
+        clean_status = status if status in {"idea", "active", "used"} else "idea"
+        clean_chapter_id = chapter_id if clean_status in {"active", "used"} else None
+        conn = sqlite3.connect(self._db_path)
+        try:
+            conn.execute(
+                """
+                UPDATE beats
+                SET text = ?, notes = ?, status = ?, chapter_id = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    text.strip(),
+                    notes.strip(),
+                    clean_status,
+                    clean_chapter_id,
+                    local_timestamp(),
+                    beat_id,
+                ),
+            )
+            conn.execute("DELETE FROM beat_characters WHERE beat_id = ?", (beat_id,))
+            for character_id in sorted(character_ids):
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO beat_characters (beat_id, character_id)
+                    VALUES (?, ?)
+                    """,
+                    (beat_id, character_id),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _prompt_new_beat(self) -> bool:
+        if not self._db_path:
+            return False
+        text, ok = QInputDialog.getText(self, "New Beat", "Capture beat:")
+        if not ok or not text.strip():
+            return False
+        beat_id = self._insert_beat(text)
+        if beat_id is None:
+            return False
+        self._refresh_beats_panel()
+        self.status_bar.setText("Beat captured.")
+        QTimer.singleShot(2500, lambda: self._update_status(self.editor.toPlainText()))
+        return True
+
+    def _add_beat(self) -> None:
+        self._prompt_new_beat()
+
+    def _open_beat(self, beat_id: int) -> None:
+        if not self._db_path:
+            return
+        beat = self._fetch_beat_by_id(beat_id)
+        if beat is None:
+            return
+        selected_character_ids = self._fetch_beat_character_ids(beat_id)
+        chapters = [(chapter_id, title) for chapter_id, title, _path in self._chapters]
+        characters = self._fetch_character_options()
+        dialog = BeatDetailDialog(
+            beat,
+            chapters,
+            characters,
+            selected_character_ids,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._update_beat(
+            beat_id,
+            text=dialog.text(),
+            notes=dialog.notes(),
+            status=dialog.status(),
+            chapter_id=dialog.chapter_id(),
+            character_ids=dialog.selected_character_ids(),
+        )
+        self._refresh_beats_panel()
+
+    def _assign_beat_to_current_chapter(self, beat_id: int) -> None:
+        if not self._db_path or self._current_chapter_id is None:
+            return
+        conn = sqlite3.connect(self._db_path)
+        try:
+            conn.execute(
+                """
+                UPDATE beats
+                SET status = 'active', chapter_id = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (self._current_chapter_id, local_timestamp(), beat_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        self._refresh_beats_panel()
+
+    def _mark_beat_used(self, beat_id: int) -> None:
+        if not self._db_path:
+            return
+        conn = sqlite3.connect(self._db_path)
+        try:
+            conn.execute(
+                """
+                UPDATE beats
+                SET status = 'used', updated_at = ?
+                WHERE id = ?
+                """,
+                (local_timestamp(), beat_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        self._refresh_beats_panel()
+
+    def _fetch_character_options(self) -> list[tuple[int, str]]:
+        if not self._db_path:
+            return []
+        conn = sqlite3.connect(self._db_path)
+        try:
+            rows = conn.execute(
+                "SELECT id, name FROM characters ORDER BY name COLLATE NOCASE"
+            ).fetchall()
+        finally:
+            conn.close()
+        return [(int(row[0]), str(row[1])) for row in rows]
+
+    def _fetch_scene_ids_by_position(self) -> dict[int, int]:
+        if not self._db_path:
+            return {}
+        conn = sqlite3.connect(self._db_path)
+        try:
+            rows = conn.execute(
+                "SELECT id, position FROM scenes ORDER BY position"
+            ).fetchall()
+        finally:
+            conn.close()
+        return {int(position): int(scene_id) for scene_id, position in rows}
+
+    def _fetch_scene_character_map(self) -> dict[int, set[int]]:
+        if not self._db_path:
+            return {}
+        conn = sqlite3.connect(self._db_path)
+        try:
+            rows = conn.execute(
+                "SELECT scene_id, character_id FROM scene_characters"
+            ).fetchall()
+        finally:
+            conn.close()
+        mapping: dict[int, set[int]] = {}
+        for scene_id, character_id in rows:
+            mapping.setdefault(int(scene_id), set()).add(int(character_id))
+        return mapping
+
+    def _set_scene_characters(self, scene_id: int, character_ids: set[int]) -> None:
+        if not self._db_path:
+            return
+        conn = sqlite3.connect(self._db_path)
+        try:
+            ensure_vault_schema(conn)
+            conn.execute("DELETE FROM scene_characters WHERE scene_id = ?", (scene_id,))
+            for character_id in sorted(character_ids):
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO scene_characters (scene_id, character_id)
+                    VALUES (?, ?)
+                    """,
+                    (scene_id, character_id),
+                )
+            conn.commit()
+        finally:
+            conn.close()
 
     def _load_outliner(self) -> None:
         if not self._chapters:
             self._outliner_panel.set_outline([])
             return
+
+        character_options = self._fetch_character_options()
+        scene_id_by_position = self._fetch_scene_ids_by_position()
+        scene_character_map = self._fetch_scene_character_map()
 
         storyline_map: dict[int, list[str]] = {}
         if self._db_path:
@@ -3365,6 +5397,7 @@ class HearthWindow(QMainWindow):
                 storyline_map.setdefault(int(chapter_id), []).append(str(name))
 
         entries: list[dict[str, object]] = []
+        scene_position = 0
         for chapter_id, title, path in self._chapters:
             text = ""
             if path.exists():
@@ -3372,7 +5405,22 @@ class HearthWindow(QMainWindow):
             lines = text.splitlines()
             fm = _parse_frontmatter(lines)
             synopsis = str(fm.get("synopsis") or "")
-            scenes = _split_scenes(text)
+            chapter_scenes: list[dict[str, object]] = []
+            for scene_title, _scene_body in _split_scenes(text):
+                scene_position += 1
+                scene_id = scene_id_by_position.get(scene_position)
+                present = (
+                    set(scene_character_map.get(scene_id, set()))
+                    if scene_id is not None
+                    else set()
+                )
+                chapter_scenes.append(
+                    {
+                        "title": scene_title,
+                        "scene_id": scene_id,
+                        "present_character_ids": present,
+                    }
+                )
             entries.append(
                 {
                     "chapter_id": chapter_id,
@@ -3380,7 +5428,8 @@ class HearthWindow(QMainWindow):
                     "word_count": self._chapter_word_counts.get(path, 0),
                     "storyline_tags": storyline_map.get(chapter_id, []),
                     "synopsis": synopsis,
-                    "scenes": scenes,
+                    "scenes": chapter_scenes,
+                    "character_options": character_options,
                 }
             )
 
@@ -3627,15 +5676,14 @@ class HearthWindow(QMainWindow):
         chapter_words = self._count_words(text)
         if self._current_chapter_path:
             self._chapter_word_counts[self._current_chapter_path] = chapter_words
-        project_words = self._project_word_total()
-        today_words = self._words_written_today()
-        goal = max(1, int(self._daily_goal))
         streak = self._current_streak()
         chapter_name = ""
         if self._current_chapter_id is not None:
             chapter = next((c for c in self._chapters if c[0] == self._current_chapter_id), None)
             if chapter:
                 chapter_name = chapter[1]
+        self.title_bar.set_chapter_name(chapter_name or "No Chapter")
+        self.title_bar.set_session_meta(save_state="saved", word_count=chapter_words)
         
         # Format: "Chapter 1  ·  2 words  ·  saved just now"
         # With optional: "↑ 847 / 1000" for Exhale, "· 🜂 3d" for streak
@@ -3710,6 +5758,12 @@ class HearthWindow(QMainWindow):
             QEvent.Type.InputMethod,
         ):
             self._on_typing_started()
+        if self.isFullScreen() and event.type() in (
+            QEvent.Type.MouseMove,
+            QEvent.Type.Enter,
+            QEvent.Type.Leave,
+        ):
+            self._sync_full_screen_title_bar_reveal()
         return super().eventFilter(obj, event)
 
     def _on_typing_started(self) -> None:
@@ -3749,6 +5803,49 @@ class HearthWindow(QMainWindow):
             return
         dialog = LibraryDialog(entries, self._open_entry_path, self)
         dialog.exec()
+
+    def _position_overlay(self, dialog: QDialog, width: int, height: int) -> None:
+        dialog.resize(width, height)
+        frame = self.frameGeometry()
+        x = frame.x() + max(0, (frame.width() - width) // 2)
+        y = frame.y() + max(20, (frame.height() - height) // 2)
+        dialog.move(x, y)
+
+    def _open_character_roster(self) -> None:
+        self._hide_drawers()
+        if not self._db_path:
+            QMessageBox.information(self, "Characters", "No project database available.")
+            return
+        dialog = CharacterRosterDialog(
+            self._db_path,
+            on_open_profile=self._open_character_profile,
+            on_new_character=self._open_new_character_profile,
+            on_roster_changed=self._on_characters_changed,
+            parent=self,
+        )
+        self._position_overlay(dialog, 920, 620)
+        dialog.exec()
+        self._load_outliner()
+
+    def _open_new_character_profile(self) -> None:
+        self._open_character_profile(None)
+
+    def _open_character_profile(self, character_id: int | None) -> None:
+        if not self._db_path:
+            QMessageBox.information(self, "Characters", "No project database available.")
+            return
+        dialog = CharacterProfileDialog(
+            self._db_path,
+            character_id=character_id,
+            parent=self,
+        )
+        self._position_overlay(dialog, 900, 640)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._on_characters_changed()
+
+    def _on_characters_changed(self) -> None:
+        self._load_outliner()
+        self._refresh_beats_panel()
 
     def _generate_character_palette(self) -> None:
         if not self._db_path:
@@ -4143,6 +6240,7 @@ class HearthWindow(QMainWindow):
         if ok:
             self._scan_has_data = self._has_scan_data()
             self._set_scan_status(f"✓ Scan complete ({detail})")
+            self._load_outliner()
             return
         if "spacy" in detail.casefold() or "en_core_web_sm" in detail.casefold():
             self._spacy_available = False
@@ -4231,34 +6329,42 @@ class HearthWindow(QMainWindow):
         self.shell.echo_label.setText("\n".join(lines))
         self.shell.echo_label.setVisible(True)
 
+    def _toggle_beats_panel(self) -> None:
+        if self._beats_drawer.is_open():
+            self._beats_drawer.hide_drawer()
+            return
+        self._hide_drawers(except_drawer=self._beats_drawer)
+        self._refresh_beats_panel()
+        self._beats_drawer.show_drawer()
+
+    def _quick_capture_beat(self) -> None:
+        captured = self._prompt_new_beat()
+        if captured and self._beats_drawer.is_open():
+            self._refresh_beats_panel()
+
     def _toggle_constellation(self) -> None:
         if self._constellation_dock.isVisible():
             self._constellation_dock.hide()
             return
+        self._hide_drawers()
         self._constellation_view.refresh()
         self._constellation_dock.show()
         self._constellation_dock.raise_()
 
     def _toggle_outliner(self) -> None:
-        if self._outliner_dock.isVisible():
-            self._outliner_dock.hide()
+        if self._outliner_drawer.is_open():
+            self._outliner_drawer.hide_drawer()
             return
+        self._hide_drawers(except_drawer=self._outliner_drawer)
         self._load_outliner()
-        self._outliner_dock.show()
-        self._outliner_dock.raise_()
-
-    def _toggle_notes(self) -> None:
-        if self._notes_dock.isVisible():
-            self._notes_dock.hide()
-            return
-        self._notes_dock.show()
-        self._notes_dock.raise_()
+        self._outliner_drawer.show_drawer()
 
     def _toggle_sparks(self) -> None:
         """Toggle the Sparks panel visibility."""
         if self._sparks_dock.isVisible():
             self._sparks_dock.hide()
             return
+        self._hide_drawers()
 
         # Lazily create the Sparks panel on first show
         if self._sparks_panel is None and self._project_root and self._methodology_db is not None:
@@ -4268,7 +6374,7 @@ class HearthWindow(QMainWindow):
             )
             self._sparks_dock.setWidget(self._sparks_panel)
 
-            # Add Sparks panel to fade effects for focus mode
+            # Include Sparks in ambient control fade animations.
             effect = QGraphicsOpacityEffect(self._sparks_dock)
             effect.setOpacity(1.0)
             self._sparks_dock.setGraphicsEffect(effect)
@@ -4328,6 +6434,7 @@ class HearthWindow(QMainWindow):
         if self._companion_dock.isVisible():
             self._companion_dock.hide()
             return
+        self._hide_drawers()
 
         # Lazily create the review panel on first show
         if self._companion_review_panel is None and self._project_root and self._methodology_db is not None:
@@ -4339,7 +6446,7 @@ class HearthWindow(QMainWindow):
             )
             self._companion_dock.setWidget(self._companion_review_panel)
 
-            # Add Companion Doc panel to fade effects for focus mode
+            # Include Companion Doc in ambient control fade animations.
             effect = QGraphicsOpacityEffect(self._companion_dock)
             effect.setOpacity(1.0)
             self._companion_dock.setGraphicsEffect(effect)
@@ -4351,51 +6458,87 @@ class HearthWindow(QMainWindow):
         self._companion_dock.show()
         self._companion_dock.raise_()
 
-    def _toggle_focus_mode(self) -> None:
-        if not self._focus_mode:
-            self._focus_restore_state = {
-                "title_bar": self.title_bar.isVisible(),
-                "status_bar": self.status_bar.isVisible(),
-                "chapters_dock": self._chapters_dock.isVisible(),
-                "storylines_dock": self._storylines_dock.isVisible(),
-                "outliner_dock": self._outliner_dock.isVisible(),
-                "notes_dock": self._notes_dock.isVisible(),
-                "constellation_dock": self._constellation_dock.isVisible(),
-                "echo_label": self.shell.echo_label.isVisible(),
-            }
-            self.title_bar.hide()
-            self.status_bar.hide()
-            self._chapters_dock.hide()
-            self._storylines_dock.hide()
-            self._outliner_dock.hide()
-            self._notes_dock.hide()
-            self._constellation_dock.hide()
-            self.shell.echo_label.hide()
-            self.shell.set_focus_mode(True)
-            self._focus_mode = True
-            return
+    def _sync_full_screen_controls(self) -> None:
+        enabled = self.isFullScreen()
+        if hasattr(self, "title_bar"):
+            self.title_bar.fullscreen_button.blockSignals(True)
+            self.title_bar.fullscreen_button.setChecked(enabled)
+            self.title_bar.fullscreen_button.blockSignals(False)
 
-        self.shell.set_focus_mode(False)
-        if self._focus_restore_state.get("title_bar", True):
-            self.title_bar.show()
-        if self._focus_restore_state.get("status_bar", True):
-            self.status_bar.show()
-        if self._focus_restore_state.get("chapters_dock", True):
-            self._chapters_dock.show()
-        if self._focus_restore_state.get("storylines_dock", True):
-            self._storylines_dock.show()
-        if self._focus_restore_state.get("outliner_dock", True):
-            self._outliner_dock.show()
-        if self._focus_restore_state.get("notes_dock", True):
-            self._notes_dock.show()
-        if self._focus_restore_state.get("constellation_dock", False):
-            self._constellation_dock.show()
-        if self._focus_restore_state.get("echo_label", False):
-            self.shell.echo_label.show()
-        for effect in self._fade_effects.values():
-            effect.setOpacity(1.0)
-        self._controls_dimmed = False
-        self._focus_mode = False
+    def _set_title_bar_visible(self, visible: bool) -> None:
+        if not hasattr(self, "title_bar"):
+            return
+        if self.title_bar.isVisible() == visible:
+            return
+        self.title_bar.setVisible(visible)
+        self._sync_drawer_geometry()
+
+    def _sync_full_screen_title_bar_reveal(self) -> None:
+        if not self.isFullScreen():
+            self._set_title_bar_visible(True)
+            return
+        cursor_local = self._central_shell.mapFromGlobal(QCursor.pos())
+        in_shell = self._central_shell.rect().contains(cursor_local)
+        if not in_shell:
+            if self.title_bar.isVisible() and not self.title_bar.underMouse():
+                self._set_title_bar_visible(False)
+            return
+        at_reveal_strip = cursor_local.y() <= self._fullscreen_reveal_strip_px
+        over_title = self.title_bar.underMouse()
+        if at_reveal_strip or over_title:
+            self._set_title_bar_visible(True)
+            return
+        if self.title_bar.isVisible() and cursor_local.y() > (self.title_bar.height() + 8):
+            self._set_title_bar_visible(False)
+
+    def _set_full_screen(self, enabled: bool) -> None:
+        if enabled == self.isFullScreen():
+            self._sync_full_screen_controls()
+            return
+        self._hide_drawers()
+        if enabled:
+            self.showFullScreen()
+            self._set_title_bar_visible(False)
+        else:
+            self.showNormal()
+            self._set_title_bar_visible(True)
+        self._sync_full_screen_controls()
+        self._sync_drawer_geometry()
+        self.editor.setFocus()
+
+    def _toggle_full_screen(self) -> None:
+        self._set_full_screen(not self.isFullScreen())
+
+    def _exit_full_screen(self) -> None:
+        if self.isFullScreen():
+            self._set_full_screen(False)
+
+    def _handle_escape(self) -> None:
+        if (
+            self._navigation_drawer.is_open()
+            or self._outliner_drawer.is_open()
+            or self._beats_drawer.is_open()
+        ):
+            self._hide_drawers()
+            return
+        self._exit_full_screen()
+
+    def _manual_save(self) -> None:
+        text = self.editor.toPlainText()
+        self._save_draft(text)
+        self._update_status(text)
+
+    def changeEvent(self, event) -> None:
+        if event.type() == QEvent.Type.WindowStateChange:
+            self._sync_full_screen_controls()
+            self._sync_full_screen_title_bar_reveal()
+        super().changeEvent(event)
+
+    def resizeEvent(self, event) -> None:
+        self._sync_drawer_geometry()
+        if self.isFullScreen():
+            self._sync_full_screen_title_bar_reveal()
+        super().resizeEvent(event)
 
     def closeEvent(self, event) -> None:
         self._log_session_writing()
