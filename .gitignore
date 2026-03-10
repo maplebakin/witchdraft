@@ -1,0 +1,31 @@
+# Limit this repo to the projects it already tracks.
+/*
+!/README.md
+!/.gitignore
+!/Design Space/
+!/WitchDraft/
+
+# Design Space generated files
+/Design Space/node_modules/
+/Design Space/dist/
+/Design Space/.vite/
+/Design Space/src-tauri/target/
+/Design Space/.cache/
+/Design Space/.astro/
+/Design Space/test-results/
+/Design Space/coverage/
+/Design Space/playwright-report/
+/Design Space/.idea/
+/Design Space/.vscode/
+/Design Space/*.log
+/Design Space/*.tsbuildinfo
+/Design Space/.DS_Store
+/Design Space/Thumbs.db
+
+# WitchDraft generated files
+/WitchDraft/.venv/
+/WitchDraft/**/__pycache__/
+/WitchDraft/**/*.py[cod]
+/WitchDraft/src/*.egg-info/
+/WitchDraft/src/witchdraft.egg-info/
+/WitchDraft/vault.db

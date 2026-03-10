@@ -1,7 +1,0 @@
-PyQt6>=6.5.0
-
-[pdf]
-reportlab>=4.0.0
-
-[spacy]
-spacy>=3.6.0
