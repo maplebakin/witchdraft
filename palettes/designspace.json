@@ -1,0 +1,8 @@
+{
+  "dusk-gold": ["#2a1e3d", "#5b4a66", "#c4a97d", "#f0e6c8"],
+  "ember-ash": ["#8b2613", "#5c3f35", "#d9b49a", "#f5f0e6"],
+  "static-blue": ["#0f1a26", "#2a4d69", "#7fb3c4", "#eaf4f9"],
+  "goat-green": ["#1a2b1f", "#3d5a3d", "#a8c686", "#f0f9eb"],
+  "veil-purple": ["#1e1b2f", "#4a3f6b", "#a28dcc", "#f2effa"],
+  "crown-crimson": ["#3a000f", "#7a1e2a", "#d4a5a5", "#fff5f5"]
+}

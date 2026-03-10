@@ -1,0 +1,2 @@
+\OH so this is the beginning then?
+The beginning of it all? Or is is nothing? Or is it something? Maybe it's all of the above. Truly, I don't know. But it's a space. A space to begin. A space that's created, and a space that's mine. So we begin. 

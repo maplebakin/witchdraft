@@ -1,0 +1,50 @@
+I need to transform the WitchDraft UI to have a soft, cozy, sanctuary-like feel rather than harsh boxes and raw text. The current interface has very angular, boxy elements and stark contrasts that feel clinical rather than welcoming.
+
+For the overall aesthetic, I want:
+- Soft rounded corners on all UI elements (buttons, text areas, panels, etc.)
+- Warmer, more muted color palette with softer contrasts
+- Gentle gradients and subtle textures instead of flat colors
+- Softer shadows and depth effects
+- More organic, flowing shapes
+
+Specific changes needed:
+
+1. **Hearth Editor (Main Writing Area)**:
+- Round the text area edges with a soft border
+- Use warmer background colors (#f5f1e8 or similar warm off-white)
+- Softer text color (#4a4540 instead of stark black)
+- Gentle drop shadow around the writing area to create a "page" effect
+- Rounded corners on scrollbars if possible
+
+2. **Title Bar**:
+- Softer gradient background instead of flat color
+- Rounded corner buttons with softer hover states
+- More subtle icons with gentle animations
+- Warmer color scheme overall
+
+3. **Panels (Chapters, Storylines)**:
+- Rounded corners on panel containers
+- Soft pastel background colors
+- Gentle hover effects on list items
+- Softer borders and dividers
+
+4. **Buttons**:
+- All buttons should have rounded corners (12-16px radius)
+- Subtle gradient backgrounds
+- Softer hover and click animations
+- Warmer color palette (muted golds, soft greens, warm grays)
+
+5. **Constellation View**:
+- Softer node shapes (perhaps rounded rectangles or ovals instead of strict circles)
+- Warmer color palette for nodes
+- Gentler line weights for connections
+- Softer color transitions
+
+6. **General Styling**:
+- Use CSS-style styling with rounded corners (border-radius: 12px for major elements)
+- Implement soft shadows (box-shadow: 0 4px 12px rgba(0,0,0,0.08))
+- Use warmer, more muted color combinations
+- Add subtle hover animations and transitions
+- Implement softer fonts or adjust font rendering for warmth
+
+The goal is to make the entire interface feel like a warm, inviting sanctuary where creativity can flourish, rather than a sterile workspace. The user should feel embraced by the interface, not confronted by it.
